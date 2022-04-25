@@ -12,7 +12,7 @@
 <xacro:property name="base2Vorderwagen" value="0.04" />
 <xacro:property name="Hinterwagenghost2Hinterwagen" value="0.025" />
 
-<!-- Reifenparameter -->
+<!-- Radparameter -->
 <xacro:property name="wheel_radius" value="0.140" />
 <xacro:property name="wheel_thickness" value="0.09" />
 <xacro:property name="x_joint_wheel_front" value="0" />
