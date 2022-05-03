@@ -1,6 +1,9 @@
 # Floribot_Simulation
 
 In diesem Git liegen die Dateien für die Floribot Simulation ab.
+Um das Repository zu klonen folgenden Befehl benutzen:
+
+  git clone https://github.com/Euleeee/Floribot_Simulation catkin_ws
 
 
 # Installation Realsense Dependencies
