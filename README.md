@@ -15,6 +15,7 @@ Existiert der Ordner bereits, muss er zuerst gelöscht werden. Optional könnte 
         sudo apt-get install python3 
 -   XACRO: -> Besonderheit beachten
         sudo apt install ros-neotic-xacro 
+- Für XACRO: Die xacro.py aus dem Git herunterladen und per "sudo cp <Downloadort> /opt/ros/noetic/share/xacro" in den Zielordner kopieren
     
 # Installation Realsense Dependencies
 
