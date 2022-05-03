@@ -1,0 +1,60 @@
+<?xml version='1.0'?>
+<launch>
+
+  <!-- these are the arguments you can pass this launch file, for example paused:=true -->
+  <arg name="paused" default="false"/>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="gui" default="true"/>
+  <arg name="headless" default="false"/>
+  <arg name="debug" default="false"/>
+  <arg name="model" default="$(find floribot_simulation)/urdf/Floribot_final.urdf.xacro"/>
+  <arg name="rvizconfig" default="$(find floribot_simulation)/rviz/urdf.rviz" />
+  <arg name="world_path" default="$(find virtual_maize_field)/worlds/"/>
+  <arg name="world_name" default="generated.world"/>
+
+  <!-- We resume the logic in empty_world.launch, changing only the name of the world to be launched -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="debug" value="$(arg debug)" />
+    <arg name="gui" value="$(arg gui)" />
+    <arg name="paused" value="$(arg paused)"/>
+    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+    <arg name="headless" value="$(arg headless)"/>
+    <arg name="world_name" value="$(arg world_path)$(arg world_name)" />
+  </include>
+  
+
+  <include file="$(find sick_scan)/launch/sick_tim_5xx.launch"></include>
+  <include file="$(find realsense2_camera)/launch/rs_camera.launch"></include>
+  <include file="$(find base)/launch/base_node.launch"></include>
+  
+  <param name="robot_description" command="$(find xacro)/xacro.py $(arg model)" />
+
+  <!-- Open Simulation in rviz -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
+
+  <!-- push robot_description to factory and spawn robot in gazebo -->
+  <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
+        args="-urdf -model Floribot -param robot_description -x -2.8 -y -4.0 -z 1.00000 -R 0 -P 0 -Y 1.583011" /> 
+        <!-- args="-z 1.0 -unpause -urdf -model robot -param robot_description" respawn="false" output="screen" /> -->
+        
+
+  <node pkg="robot_state_publisher" type="robot_state_publisher"  name="robot_state_publisher">
+    <param name="publish_frequency" type="double" value="30.0" />
+  </node>
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
+
+  <!-- Init Controllers-->
+  <rosparam command="load"
+          file="$(find floribot_simulation)/config/joints.yaml"
+          ns="flori_joint_state_controller" />
+    
+  <!-- <rosparam command="load"
+            file="$(find floribot_simulation)/config/wheel.yaml"
+            ns="flori_wheel_controller" /> -->
+
+  <node name="flori_controller_spawner" pkg="controller_manager" type="spawner"
+    args="flori_joint_state_controller
+          --shutdown-timeout 3"/>
+     <!-- flori_wheel_controller -->
+</launch>
