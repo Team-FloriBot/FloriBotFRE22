@@ -10,11 +10,11 @@ Existiert der Ordner bereits, muss er zuerst gelöscht werden. Optional könnte 
 # Benötigte Software
 -   ROS Noetic: http://wiki.ros.org/noetic/Installation/Ubuntu 
 -   Gazebo 11:
-    curl -sSL http://get.gazebosim.org | sh
+        curl -sSL http://get.gazebosim.org | sh
 -   Python: 
-    sudo apt-get install python3 
+        sudo apt-get install python3 
 -   XACRO: -> Besonderheit beachten
-    sudo apt install ros-neotic-xacro 
+        sudo apt install ros-neotic-xacro 
     
 # Installation Realsense Dependencies
 
