@@ -7,6 +7,12 @@ git clone https://github.com/Euleeee/Floribot_Simulation catkin_ws
 
 Existiert der Ordner bereits, muss er zuerst gelöscht werden. Optional könnte man auch das <catkin_ws> durch einen anderen Zielordnernamen ersetzen.
 
+# Benötigte Software
+    ROS Noetic: http://wiki.ros.org/noetic/Installation/Ubuntu 
+    Gazebo 11: curl -sSL http://get.gazebosim.org | sh
+    Python: sudo apt-get install python3 
+    XACRO: sudo apt install ros-neotic-xacro -> Besonderheit beachten
+
 # Installation Realsense Dependencies
 
 -	Zunächst sudo apt-get install ros-noetic-ddynamic-reconfigure ausführen
