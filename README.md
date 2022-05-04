@@ -15,13 +15,13 @@ Gazebo 11:
     
 Python: 
 
-    sudo apt-get install python3 
+    sudo apt install python-is-python3
     
 XACRO:
 
     sudo apt install ros-neotic-xacro
     
-Anmerkung XACRO: Nach dem sudo apt install Befehl die xacro.py aus dem Git herunterladen und per folgenden Befehl in den Zielordner kopieren.
+Anmerkung XACRO: Nach dem sudo apt install Befehl die xacro.py aus dem Git herunterladen und überpüfen, ob das Skript als Programm ausgeführt werden kann. Dazu Rechtsklick auf das xacro.py -> Dann auf Eigenschaften -> Dann im Reiter auf Zugriffsrechte ->  Überprüfen, ob im Punkt "Ausführen:" die Checkbox ein Häkchen hat. Ist das der Fall, dann per folgenden Befehl die Datei in den Zielordner kopieren.
 
     sudo cp <Downloadort> /opt/ros/noetic/share/xacro 
 
