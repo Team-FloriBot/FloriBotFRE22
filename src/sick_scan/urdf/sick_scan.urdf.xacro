@@ -56,7 +56,7 @@
     <link name="${name}">
       <visual>
         <geometry>
-          <mesh filename="${mesh}" />
+          <mesh filename="package://sick_scan/meshes/sick_tim_5xx.stl" />
         </geometry>
         <material name="blue" >
           <color rgba="0 0 1 1" />
@@ -64,7 +64,7 @@
       </visual>
       <collision>
         <geometry>
-          <mesh filename="${mesh}" />
+          <mesh filename="package://sick_scan/meshes/sick_tim_5xx.stl" />
         </geometry>
       </collision>
       <inertial>
