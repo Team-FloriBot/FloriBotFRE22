@@ -27,7 +27,7 @@
   <include file="$(find realsense2_camera)/launch/rs_camera.launch"></include>
   <include file="$(find base)/launch/base_node.launch"></include>
   
-  <param name="robot_description" command="$(find xacro)/xacro.py $(arg model)" />
+  <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
 
   <!-- Open Simulation in rviz -->
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
