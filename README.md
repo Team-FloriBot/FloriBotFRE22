@@ -9,6 +9,10 @@ Existiert der Ordner bereits, muss er zuerst gelöscht werden. Optional könnte 
 
 # Benötigte Software
 ROS Noetic: http://wiki.ros.org/noetic/Installation/Ubuntu <br>
+ROS Velocity Controllers: 
+
+    sudo apt install ros-noetic-velocity-controllers
+    
 Gazebo 11: 
 
     curl -sSL http://get.gazebosim.org | sh
