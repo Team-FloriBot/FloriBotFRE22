@@ -1,3 +1,25 @@
 # The joint state controller handles publishing transforms for any moving joints
-type: "joint_state_controller/JointStateController"
-publish_rate: 50
+floribot:
+   joint_state_controller:
+      type: "joint_state_controller/JointStateController"
+      publish_rate: 50
+
+   joint_fl_controller:
+      type: velocity_controllers/JointVelocityController
+      joint: joint_frontLeft
+      pid: {p: 100.0, i: 0.01, d: 10.0}
+      
+   joint_fr_controller:
+      type: velocity_controllers/JointVelocityController
+      joint: joint_frontRight
+      pid: {p: 100.0, i: 0.01, d: 10.0}
+      
+   joint_rl_controller:
+      type: velocity_controllers/JointVelocityController
+      joint: joint_rearLeft
+      pid: {p: 100.0, i: 0.01, d: 10.0}
+      
+   joint_rr_controller:
+      type: velocity_controllers/JointVelocityController
+      joint: joint_rearRight
+      pid: {p: 100.0, i: 0.01, d: 10.0}

@@ -41,5 +41,5 @@ catkin_package(
     gazebo_ros
 )
 
-add_library(${PROJECT_NAME} wheel_api/publish_joint.cpp)
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+#add_library(${PROJECT_NAME} wheel_api/publish_joint.cpp)
+#target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})

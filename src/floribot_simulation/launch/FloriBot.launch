@@ -26,6 +26,7 @@
   <include file="$(find sick_scan)/launch/sick_tim_5xx.launch"></include>
   <include file="$(find realsense2_camera)/launch/rs_camera.launch"></include>
   <include file="$(find base)/launch/base_node.launch"></include>
+  <include file="$(find base2gazebo)/launch/base2gazebo.launch"></include>
   
   <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
 
@@ -45,16 +46,12 @@
   <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
 
   <!-- Init Controllers-->
-  <rosparam command="load"
-          file="$(find floribot_simulation)/config/joints.yaml"
-          ns="flori_joint_state_controller" />
-    
-  <!-- <rosparam command="load"
-            file="$(find floribot_simulation)/config/wheel.yaml"
-            ns="flori_wheel_controller" /> -->
-
-  <node name="flori_controller_spawner" pkg="controller_manager" type="spawner"
-    args="flori_joint_state_controller
-          --shutdown-timeout 3"/>
-     <!-- flori_wheel_controller -->
+  <rosparam file="$(find floribot_simulation)/config/joints.yaml" command="load"/> 
+  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" ns="floribot"
+    args="joint_state_controller
+          joint_fl_controller
+          joint_fr_controller
+          joint_rl_controller
+          joint_rr_controller
+            "/>
 </launch>

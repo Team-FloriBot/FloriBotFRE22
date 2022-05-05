@@ -48,10 +48,10 @@
   <transmission name="joint_${position}_trans">
         <type>transmission_interface/SimpleTransmission</type>
         <joint name="joint_${position}">
-          <hardwareInterface>VelocityJointInterface</hardwareInterface>
+          <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
         </joint>
         <actuator name="joint_${position}_motor">
-          <hardwareInterface>VelocityJointInterface</hardwareInterface>
+          <hardwareInterface>hardware_interface/VelocityActuatorInterface</hardwareInterface>
           <mechanicalReduction>1</mechanicalReduction>
         </actuator>
   </transmission>
@@ -433,9 +433,14 @@
 <!-- Gazebo plugin for ROS Control -->
   <gazebo>
     <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
-      <robotNamespace>/</robotNamespace>
+      <robotNamespace>floribot</robotNamespace>
     </plugin>
-    <plugin name="floribot_simulation" filename="libfloribot_simulation.so"/>
+    <!-- <plugin name="floribot_simulation" filename="libfloribot_simulation.so">
+    <activate_pid_control>yes</activate_pid_control>                
+		<wheel_kp>1.0</wheel_kp>
+		<wheel_ki>0.5</wheel_ki>
+		<wheel_kd>0.01</wheel_kd>
+    </plugin> -->
   </gazebo>
 
   <!--<xacro:sick_tim_5xx name="front_laser" ros_topic="laser_scanner_front"/>-->

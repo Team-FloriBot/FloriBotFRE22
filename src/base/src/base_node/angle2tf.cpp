@@ -22,7 +22,7 @@ int main(int argc, char** argv)
     ros::NodeHandle Nh;
     TF = new tf2_ros::TransformBroadcaster();
     //ros::Subscriber AngleSubs=Nh.subscribe("/sensors/bodyAngle", 1, &AngleCallback);
-    ros::Subscriber AngleSubs=Nh.subscribe("/joint_states", 1, &AngleCallback);
+    ros::Subscriber AngleSubs=Nh.subscribe("/floribot/joint_states", 1, &AngleCallback);
 
     // Publisher starten
     ActualSpeed=Nh.advertise<base::Wheels>("engine/actualSpeed", 1);
