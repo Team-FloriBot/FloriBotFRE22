@@ -19,6 +19,7 @@ RUN curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sud
   apt-get -y --no-install-recommends install \
     ros-${ROS_DISTRO}-gazebo-ros-pkgs \
     ros-${ROS_DISTRO}-gazebo-ros-control \
+    ros-${ROS_DISTRO}-velocity-controllers \
     ros-${ROS_DISTRO}-pointgrey-camera-description \
     ros-${ROS_DISTRO}-robot-localization \
     ros-${ROS_DISTRO}-twist-mux \
@@ -56,4 +57,4 @@ ENV ROS_MASTER_URI=http://simulation:11311
 # this line to start your own robot. The ${TASK_NUMBER} variable will be 1 during task 1, 2 during task 2 etc. You can use this 
 # variable set the robot task as is done below. Your launch file is responsible for spawning the robot description in the virual_maize_field
 # package.
-CMD  roslaunch floribot_simulation FloriBot.launch --wait --screen; sleep 999999
+CMD  roslaunch floribot_simulation FloriBot_Docker.launch --wait --screen; sleep 999999
