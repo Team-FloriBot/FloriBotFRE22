@@ -7,6 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install Ubuntu packages.
 RUN apt-get update && \
+  apt-get install -y software-properties-common && \
   apt-get -y --no-install-recommends install \
     curl \
     git \
@@ -24,8 +25,17 @@ RUN curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sud
     ros-${ROS_DISTRO}-robot-localization \
     ros-${ROS_DISTRO}-twist-mux \
     ros-${ROS_DISTRO}-interactive-marker-twist-server \
+    ros-${ROS_DISTRO}-ddynamic-reconfigure \
     ros-${ROS_DISTRO}-hector-gazebo-plugins && \
   rm -rf /var/lib/apt/lists/*   
+
+# Try to install packages
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCDE
+RUN add-apt-repository "deb https://librealsense.intel.com/Debian/apt-repo $(lsb_release -cs) main" -u
+RUN apt-get install -y librealsense2-dkms 
+RUN apt-get install -y librealsense2-utils 
+RUN apt-get install -y librealsense2-dev
+RUN  rm -rf /var/lib/apt/lists/*
 
 # Remove dependencies we don't need anymore.
 RUN apt-get -y remove curl
