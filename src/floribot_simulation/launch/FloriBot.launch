@@ -27,6 +27,7 @@
   <include file="$(find realsense2_camera)/launch/rs_camera.launch"></include>
   <include file="$(find base)/launch/base_node.launch"></include>
   <include file="$(find base2gazebo)/launch/base2gazebo.launch"></include>
+  <include file="$(find path_planning)/launch/move_robot_path_pattern.launch"></include>
   
   <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
 
@@ -35,7 +36,7 @@
 
   <!-- push robot_description to factory and spawn robot in gazebo -->
   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
-        args="-urdf -model Floribot -param robot_description -x -2.8 -y -4.0 -z 1.00000 -R 0 -P 0 -Y 1.583011" /> 
+        args="-urdf -model Floribot -param robot_description -x 0.2 -y -3 -z 1.00000 -R 0 -P 0 -Y 1.583011" /> 
         <!-- args="-z 1.0 -unpause -urdf -model robot -param robot_description" respawn="false" output="screen" /> -->
         
 
