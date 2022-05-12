@@ -54,3 +54,35 @@ Sobald die Simulation läuft, kann mit dem Roboter mit folgendem Befehl eine Ges
     rostopic pub /cmd_vel geometry_msgs/Twist -r 10 -- '[0.2, 0.0, 0.0]' '[0.0, 0.0, 0.0]' 
     
 Die Simulation kann mit der Tastenkombination Strg+C beendet werden. 
+
+# Docker Umgebung
+Für die Docker Umgebung kann sich an den FRE Repo's orientiert werden. Um ein Docker Image vom Floribot zu erstellen, muss dich sich das Docker-File im Worksapce befinden und dann folgender Befehl ausgeführt werden (nähere Infos dazu: https://github.com/FieldRobotEvent/example_ws)
+
+    docker build . -t robot_workspace
+
+Neben dem Roboterimage muss noch ein Simulationsimage erstellt werden, welches mit dem Competition Enviornment verkünpft ist. Dazu muss zuerst das Git Repository des Competion Enviornments geklont werden.
+
+    git clone https://github.com/FieldRobotEvent/competition_environment.git
+    
+Anschließend werden die benötigten Simulationsdatei aus dem Roboter Image für das Simulations Image kopiert mit dem Befehl. Um das Skript auszuführen, muss man sich im Ordner des geklonten Competition Enviornemnt befinden.
+
+    python3 scripts/copy_simulation_files.py
+    
+Nach dem das Kopieren abgeschlossen wurde, muss man nun in den Unterordner task_navigation gehen, um die Navigationsumgebung zu laden. Wenn man im Ordner ist, kann man mit
+
+    docker-compose up
+    
+die Simulation über Docker starten. Über http://localhost:8080/ kann man sich die Simulation anzeigen lassen. Die verschiedenen Topics kann man sich an seinem lokalen Rechner wie folgt anzeigen lassen. Zuerst muss man ein neues Terminal öffnen und anschließend 
+
+    ROS_MASTER_URI=http://172.20.0.5:11311
+    
+eingeben. Damit wird der ROS Master auf eine andere Andresse gelegt. Nun können alle Topics mit dem Befehl 'rostopic list' angezeigt werden. Schließt man das Terminal, so wird die ROS Master Adresse wieder auf die default Adresse zurückgesetzt. Um die Simulation zu beenden, einfach per Strg+c die Simulation abbrechen und anschließend den Befehl
+
+    docker-compose down
+    
+benutzen, um die Simulation vollständig zu beenden. 
+
+# Aktualisieren der Docker Umgebung
+Um den Docker Simulationscontainer zu aktualisieren fogledenn Befehl ausführen: 
+
+    docker pull fieldrobotevent/simulation:latest
