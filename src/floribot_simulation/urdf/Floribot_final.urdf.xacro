@@ -59,10 +59,11 @@
   <!-- hardware_interface/VelocityJointInterface -->
 
   <gazebo reference="${position}">
-    <mu1 value="0.45"/>
-    <mu2 value="0.45"/>
-    <kp value="100000000.0" />
+    <mu1 value="0.5"/>
+    <mu2 value="0.5"/>
+    <kp value="10000000.0" />
     <kd value="1.0" />
+    <fdir1 value="1 0 0"/>
     
   </gazebo> 
 
@@ -292,6 +293,7 @@
        <child link="frontLeft"/>
        <axis xyz="0 1 0"/>
        <origin xyz="${x_joint_wheel_front} ${y_joint_wheel_front} 0"/>
+        <limit effort="1.0" velocity="14.2857" />
   </joint>
 
 <!-- Transmission -->
@@ -328,6 +330,7 @@
        <child link="frontRight"/>
        <axis xyz="0 1 0"/>
        <origin xyz="${x_joint_wheel_front} -${y_joint_wheel_front} 0"/>
+       <limit effort="1.0" velocity="14.2857" />
   </joint>
 
 <!-- Transmission -->
@@ -364,6 +367,7 @@
        <child link="rearRight"/>
        <axis xyz="0 1 0"/>
        <origin xyz="${x_joint_wheel_back} -${y_joint_wheel_back} 0"/>
+       <limit effort="1.0" velocity="14.2857" />
   </joint>
 
 <!-- Transmission -->
@@ -400,6 +404,7 @@
        <child link="rearLeft"/>
        <axis xyz="0 1 0"/>
        <origin xyz="${x_joint_wheel_back} ${y_joint_wheel_back} 0"/>
+       <limit effort="1.0" velocity="14.2857" />
   </joint>
 
 <!-- Transmission -->
