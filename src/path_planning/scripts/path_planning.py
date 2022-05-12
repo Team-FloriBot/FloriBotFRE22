@@ -1,627 +1,635 @@
 #!/usr/bin/env python
+from sys import path
 import rospy
 import actionlib
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
-from tf.transformations import quaternion_from_euler
 
 
 import numpy as np
 import matplotlib.pyplot as plt
+import collections
 
-def scan2cart(scan, max_range=30.0):
-    """
-    Module converting a ROS LaserScan into cartesian coordinates.
-    param1 scan:        [LaserScan] raw laser scan
-    param2 max_range:   [m] ranges greater than this distances are omitted
-    return:             x- and y-coordinates of laser scan
-    """
-    angles = np.linspace(scan.angle_min, scan.angle_max, len(scan.ranges))
-    x = scan.ranges*np.cos(angles)
-    y = scan.ranges*np.sin(angles)
-    scan_cart = np.array([x, y])
-    scan_cart = np.transpose(scan_cart)
-    # ignore_ranges = np.array(scan.ranges) > max_range
-    # scan_cart[ignore_ranges, :] = None
-    allow_ranges = np.array(scan.ranges) <= max_range
-    scan_cart = scan_cart[allow_ranges, :]
-    return scan_cart
 
-def check_end_of_row(scan, angle_min, angle_max, range_max, ctr_max):
-    """
-    Module that uses the laser scan to detect whether the robot has reached 
-    the end of the row. It does so by summing up the ranges in a cropped
-    laser scan. If the sum is below a threshold for several times in a row,
-    the end of the field is most probably reached.
-    param1 scan:        [LaserScan] raw laser scan
-    param2 angle_min:   [rad] min angle for cropping laser scan in order to detect the end of the row
-    param3 angle_max:   [rad] max angle for cropping laser scan in order to detect the end of the row
-    param4 range_max:   [m] max range allowed for ranges in cropped laser scan
-    param5 ctr_max:     [1] how many times the sum of ranges has to fall below the threshold
-                        in order to say the end of the row is reached.
-    return:             [False, True] end of row reached (True) or not (False)
-    """
-    global end_row_ctr
-    end_of_row = False
-    # crop the laser scan
-    if scan.angle_min > angle_min:
-        angle_min = scan.angle_min
-    if scan.angle_max < angle_max:
-        angle_max = scan.angle_max
-    num_ranges = len(scan.ranges)
-    idx_lower = int(num_ranges/2 + np.round(angle_min / scan.angle_increment))
-    idx_upper = int(num_ranges/2 + np.round(angle_max / scan.angle_increment))
-    scan_cropped = np.array(scan.ranges[idx_lower:idx_upper])
-    # filter ranges above range_max
-    allow_ranges = scan_cropped <= range_max
-    scan_cropped = scan_cropped[allow_ranges]
-    # sum up all ranges
-    sum_ranges = scan_cropped.sum()
-    # if sum of ranges falls below threshold for several times in a row,
-    # the end of the field is most probably reached 
-    if sum_ranges < 1.0:
-        end_row_ctr += 1
-        print("sum_ranges:{:06.2f}, end_row_ctr: {:d}".format(sum_ranges, end_row_ctr))
-        if end_row_ctr > ctr_max:
-            end_of_row = True
-    # else the robot is still in the field
-    else:
-        end_row_ctr = 0
-    # # Debugging purposes: plot cropped scan
-    # angles = np.linspace(angle_min, angle_max, idx_upper-idx_lower)
-    # x = scan_cropped*np.cos(angles)
-    # y = scan_cropped*np.sin(angles)
-    # scan_cart = np.array([x, y])
-    # scan_cart = np.transpose(scan_cart)
-    # plt.plot(scan_cart[:,0], scan_cart[:,1], "ob", label="end of row scan")
-    # plt.legend(loc='lower left')
-    # plt.show(block=True)
-    return end_of_row
+class MoveRobotPathPattern:
+    def __init__(self):
+        self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback, queue_size=3)   # [Laserscan] subscriber on /front/scan
+        self.pub_vel = rospy.Publisher("cmd_vel", Twist, queue_size=3)                                  # [Twist] publisher on /cmd_vel
+        self.p_gain_offset_headland = rospy.get_param('~p_gain_offset_headland')                        # [1.0] gain of the p-controller applied to offset from an imaginary line for driving within the headland
+        self.p_gain_orient_headland = rospy.get_param('~p_gain_orient_headland')                        # [1.0] gain of the p-controller applied to orientation from an imaginary line for driving within the headland
+        self.max_lin_vel_in_row = rospy.get_param('~max_lin_vel_in_row')                                # [m/s] maximum linear velocity for driving within a row
+        self.max_lin_vel_in_headland= rospy.get_param('~max_lin_vel_in_headland')                       # [m/s] maximum linear velocity for driving within the headland
+        self.max_ang_vel_robot= rospy.get_param('~max_ang_vel_robot')                                   # [rad/s] maximum angluar velocity of robot
+        self.path_pattern = rospy.get_param('~path_pattern')                                            # [str] path pattern describing the robots trajectory through the field e.g. S-1L-2L-1L-0R-F
+        self.time_for_quater_turn = rospy.get_param('~time_for_quater_turn')                            # [s] the time for a +-pi/2 turn used to exit or enter a row. It determines the angular velocity, but not the stop criterion
+        self.path_pattern = self.path_pattern.replace(" ", "")                                          # remove spaces: S 1L 2L 1L 0R F --> S1L2L1L0RF
+        self.path_pattern = self.path_pattern[1:-1]                                                     # remove S (Start) and F (Finish): S1L2L1L1RF --> 1L2L1L0R
 
-def indices_peak(peak_idx, tol_bins, n_bins):
-    """ Module returning the indices before, at and after a peak for
-    evaluating a histogram
-    param1 peak_idx:    [bins] the index of the peak within the histogram
-    param2 tol_bins:    [bins] according to this tolerance indices will be returned
-                        before and after the peak
-    param3 n_bins:      [bins] the number of bins in the histogram
-    """
-    if peak_idx + tol_bins >= n_bins:
-        indices = np.r_[(peak_idx - tol_bins):n_bins, 0:(peak_idx + tol_bins - n_bins - 1)]
-    elif peak_idx - tol_bins < 0:
-        indices = np.r_[(peak_idx - tol_bins + n_bins):n_bins, 0:(peak_idx + tol_bins + 1)]
-    else:
-        indices = np.r_[(peak_idx - tol_bins):(peak_idx + tol_bins + 1)]
-    return indices.astype(dtype=int)
+        self.scan = LaserScan()                                                                         # [Laserscan] saving the current laser scan
+        self.x_front_laser_in_base_link = 0.305                                                         # [m] x-coordinate of front_laser frame in base_link frame
 
-def mean_peak(indices_peak, bin_counts, bin_edges, bin_res):
-    """ Module returning the mean of a peak in a histogram
-    param1 indices_peak:    [bins] the indices before, at and after a peak
-    param2 bin_counts:      [1] counts of each bin of histogram
-    param3 bin_edges:       [*] edges of each bin of histogram
-    param4 bin_res:         [*/bin] resolution of a bin of histogram 
-    """
-    bin_counts_peak = bin_counts[indices_peak]
-    bin_edges_peak = bin_edges[indices_peak] + bin_res / 2
+        self.x_means = collections.deque(maxlen=1)                                                      # circular buffer for the means of x-coordinates used in state_turn_exit_row and state_turn_enter_row
+        self.y_means = collections.deque(maxlen=1)                                                      # circular buffer for the means of y-coordinates used in state_turn_exit_row and state_turn_enter_row
+        self.x_mean = 0.0                                                                               # [m] mean of means of x-coordinates
+        self.y_mean = 0.0                                                                               # [m] mean of means of y-coordinates
+        self.x_mean_old = 0.0                                                                           # [m] previous mean of means of x-coordinates
+        self.y_mean_old = 0.0                                                                           # [m] previous mean of means of y-coordinates
+        self.row_width = 0.45                                                                           # [m] row width
+        self.turn_l = np.pi/2                                                                           # [rad] angle defining a left turn
+        self.turn_r = -np.pi/2                                                                          # [rad] angle defining a right turn
+        self.state = "state_wait_at_start"                                                              # [str] state that the state machine starts with
+        self.angle_valid = 0.0                                                                          # [rad] valid mid-row angle applicable for robot control
+        self.offset_valid = 0.0                                                                         # [m] valid mid-row offset applicable for robot control
+        self.time_start = rospy.Time.now()                                                              # [rospy.Time] timestamp used in state_headlands
+        self.laser_box_drive_headland = np.zeros((10,2))
+        self.laser_box_detect_row = np.zeros((10,2))
+        self.laser_box_drive_row = np.zeros((10,2)) 
+        self.xy_scan_raw = np.zeros((10,2))
+        self.there_was_row = False
+        self.there_was_no_row = False
+        self.trans_norow2row = False
+        self.trans_row2norow = True
+        self.ctr_trans_row2norow = 0
+        self.ctr_trans_norow2row = 0
+        self.collision_ctr = 0                                                                          # [1] stores the scan dots seen in a small laser box right in front of the robot
+        self.collision_ctr_previous = 0
+        # self.robot_running_crazy = False                                                                # [True, False] True if robot is driving through the field like a headless chicken
+        # self.end_of_row_reached = False                                                                 # [True, False] True if robot has reached the end of the row
+        self.time_start_reset_scan_dots = rospy.Time.now()
+        self.scan_left = np.zeros((10,2))
+        self.scan_right = np.zeros((10,2))
+        self.robot_width = 0.43
+        self.robot_length = 1.30
 
-    if sum(bin_counts_peak) <= 1e-16:
-        # if all bins before, at and after the peak are empty,
-        # we pretend the bin in the middle has one hit:
-        # e.g. [0, 0, 0, 0, 0] --> [0, 0, 1, 0, 0]
-        bin_counts_peak = np.zeros_like(bin_counts_peak)
-        bin_counts_peak[bin_counts_peak.shape[0]//2] = 1
+    #########################################
+    ######### Miscellaneous Methods #########
+    #########################################
 
-    return np.sum(bin_counts_peak * bin_edges_peak) / np.sum(bin_counts_peak)
+    def scan2cart_w_ign(self, scan, min_range=1.0, max_range=30.0):
+        """
+        Module converting a ROS LaserScan into cartesian coordinates.
+        param1 scan:        [LaserScan] raw laser scan
+        param2 max_range:   [m] ranges greater than this distances are omitted
+        return:             x- and y-coordinates of laser scan
+        """
+        angles = np.linspace(scan.angle_min, scan.angle_max, len(scan.ranges))
+        x = scan.ranges*np.cos(angles)
+        y = scan.ranges*np.sin(angles)
+        scan_cart = np.array([x, y])
+        ignore_ranges_max = np.array(scan.ranges) > max_range
+        ignore_ranges_min = np.array(scan.ranges) < min_range
+        ignore_ranges = np.logical_or(ignore_ranges_max, ignore_ranges_min)
+        scan_cart[:, ignore_ranges] = None
+        return scan_cart
 
-def clip(val, max_val, min_val):
-    if val > max_val:
-        return max_val
-    elif val < min_val:
-        return min_val
-    else:
-        return val
+    def scan2cart_wo_ign(self, scan):
+        """
+        Module converting a ROS LaserScan into cartesian coordinates.
+        param1 scan:        [LaserScan] raw laser scan
+        param2 max_range:   [m] ranges greater than this distances are omitted
+        return:             x- and y-coordinates of laser scan
+        """
+        angles = np.linspace(scan.angle_min, scan.angle_max, len(scan.ranges))
+        x = scan.ranges*np.cos(angles)
+        y = scan.ranges*np.sin(angles)
+        scan_cart = np.array([x, y])
+        return scan_cart
 
-def laser_callback(scan):
-    global angle
-    global offset
-    global angle_valid
-    global offset_valid
-    global row_width
-    global end_of_row
-    global xy_coords1
-    global xy_coords2
+    def detect_row_end(self):
+        """
+        Module that uses the laser scan to detect whether the robot has reached 
+        the end of the row. It does so by summing up the ranges in a cropped
+        laser scan. If the sum is below a threshold for several times in a row,
+        the end of the field is most probably reached.
+        param1 scan:        [LaserScan] raw laser scan
+        param2 angle_min:   [rad] min angle for cropping laser scan in order to detect the end of the row
+        param3 angle_max:   [rad] max angle for cropping laser scan in order to detect the end of the row
+        param4 range_max:   [m] max range allowed for ranges in cropped laser scan
+        param5 ctr_max:     [1] how many times the sum of ranges has to fall below the threshold
+                            in order to say the end of the row is reached.
+        return:             [False, True] end of row reached (True) or not (False)
+        """
 
-    if state == "state_in_row":
-        # convert scan from polar into cartesian coordinates,
-        # reduce laser range so that the robot does not see
-        # the ground when it is driving over uneven ground
-        scan_cart = scan2cart(scan, max_range=3.0)
-        xy_coords1 = scan_cart
-        # determine euclidean distance between each subsequent scan point
-        x_dist_scan = np.diff(scan_cart[:, 0])
-        y_dist_scan = np.diff(scan_cart[:, 1])
-        eucl_dist = np.sqrt(x_dist_scan**2 + y_dist_scan**2)
-        eucl_dist = np.insert(eucl_dist, 0, 0, axis=0)
+        x_min = -1.5
+        x_max = 1.0
+        y_min = -3.5*self.row_width
+        y_max = 3.5*self.row_width
+        self.laser_box_drive_row = self.laser_box(self.scan, x_min, x_max, y_min, y_max)
+        self.x_mean = np.mean(self.laser_box_drive_row[0,:])
+        end_of_row = self.x_mean < -0.1 
+        return end_of_row
 
-        # determine which scan points belong to one and the same plant and split scan accordingly
-        idx_next_plant = np.where(eucl_dist > 0.1)
-        split_plants = np.vsplit(scan_cart, idx_next_plant[0])
+    def detect_robot_running_crazy(self, scan, collisions_thresh, collision_reset_time):
+        """
+        Method that counts the number of collisions within a small laser box that
+        is placed directly in front of the robot. If the robot is hitting several
+        plants, the number of collisions will rise. If their sum is ecxeeding a
+        threshold, the method will return True, indicating that the robot is running
+        crazy now and needs to be turned off.
+        param1 scan:                    [LaserScan] raw laser scan
+        param2 collisions_thresh:       [1] threshold value for the sum of scan points 
+                                        above which it is recognized that the robot is 
+                                        going crazy.
+        param3 collision_reset_time:    [s] if the robot is driving this amount of time 
+                                        without collision,
+                                        the collision counter will be reset
+        """
+        
+        nose_box_width = 0.10
+        nose_box_height = 0.05
+        x_min = 0.23 - nose_box_height/2
+        x_max = 0.23 + nose_box_height/2
+        y_min = -nose_box_width/2
+        y_max = nose_box_width/2
+        nose_box = self.laser_box(scan, x_min, x_max, y_min, y_max)
+        num_collisions = nose_box.shape[1]
+        self.collision_ctr_previous = self.collision_ctr
+        self.collision_ctr += num_collisions
+        robot_running_crazy = self.collision_ctr > collisions_thresh
+        print("number of collisions", self.collision_ctr)
 
-        # determine mean position of all plants having at least n_points of scan points
-        n_points = 3
-        plants_all = []
-        for plant in split_plants:
-            if plant.shape[0] >= n_points:
-                mean_position = np.nanmean(plant, axis=0)
-                plants_all.append(mean_position)
-        plants_all = np.array(plants_all)
-        xy_coords2 = plants_all
-
-        # calculate line angles from one plant to another
-        x_dist_plant = np.diff(plants_all[:, 0])
-        y_dist_plant = np.diff(plants_all[:, 1])
-        angles = np.arctan2(y_dist_plant, x_dist_plant)
-        # change perspective plants to robot --> robot to plants
-        angles = -angles
-        # Modify angles so that 
-        # e.g. [   9  125   17   -2   75 -176 -175   57 -164] --> [   9  125   17   -2   75    4    5   57 -164]
-        angles = np.where(angles < np.radians(-170), angles + np.pi, angles)
-        angles = np.where(angles > np.radians(170), angles - np.pi, angles)
-
-        # apply a histogram to line angles
-        range_min_angle = -np.pi
-        range_max_angle = np.pi
-        bin_res = np.radians(5) # [radians/bin] resolution of histogram
-        n_bins_angle = int(np.round((range_max_angle - range_min_angle) / bin_res))
-        bin_counts, bin_edges = np.histogram(angles, bins=n_bins_angle, range=(range_min_angle, range_max_angle))
-        # # PLOT HISTOGRAM
-        # # of line angles
-        # fig, axs = plt.subplots()
-        # axs.hist(np.degrees(angles), bins=n_bins_angle, range=(np.degrees(range_min_angle), np.degrees(range_max_angle)))
-        # plt.show(block=True)
-
-        # evaluate histogram around previous angle of robot to the center line of corn row
-        if not np.isnan(angle):
-            # angle will only be updated if the previous angle has been a valid angle
-            # at the end of the row, 'nan' may be assigned to angle
-            # in such a case the previous angle will not be updated
-            angle_valid = angle
-        # else:
-        #     angle_valid = 0.0
-        tol_degrees = 10 # [degrees] when determining angle, we will look for angles +- this angle around angle_old
-        tol_degrees_bins = np.round(np.radians(tol_degrees) / bin_res)
-        angle_hist_idx = np.round((angle_valid + np.pi) / bin_res)
-        indices_peak_angle = indices_peak(angle_hist_idx, tol_degrees_bins, n_bins_angle)
-        # determine current angle of robot to the center line of corn row
-        angle = mean_peak(indices_peak_angle, bin_counts, bin_edges, bin_res)
-
-        # rotate scan around z by angle_new
-        c, s = np.cos(-angle), np.sin(-angle)
-        rot_z = np.array(((c, -s), (s, c)))
-        scan_cart_rot = np.matmul(scan_cart, rot_z)
-
-        # apply a histogram to y-distances of rotated scan
-        range_min_offset = -row_width # [m]
-        range_max_offset = row_width # [m]
-        bin_res = 0.01 # [m]
-        n_bins_offset = int(np.round((range_max_offset - range_min_offset) / bin_res)) # number of bins for y dist histogram
-        y_dists = scan_cart_rot[:, 1]
-        bin_counts, bin_edges = np.histogram(y_dists, bins=n_bins_offset, range=(range_min_offset, range_max_offset))
-        # # PLOT HISTOGRAM
-        # # of y distances from robot to plants
-        # fig, axs = plt.subplots()
-        # axs.hist(y_dists, bins=n_bins_offset, range=(range_min_offset, range_max_offset))
-        # plt.show(block=True)  
-
-        # evaluate histogram around y-distance of robot to the center line of corn row
-        if not np.isnan(offset):
-            # offset will only be updated if the previous offset has been a valid angle
-            # at the end of the row, 'nan' may be assigned to offset
-            # in such a case the previous offset will not be updated
-            offset_valid = offset
-        # else:
-        #     offset_valid = 0.0
-        tol_offset = 0.03 # [m]
-        tol_offset_bins = np.round(tol_offset / bin_res) # [bins]
-        offset_max_idx = np.argmax(bin_counts)
-        indices_peak_offset = indices_peak(offset_max_idx, tol_offset_bins, n_bins_offset)
-        # determine current y-distance of robot to the center line of corn row
-        offset = mean_peak(indices_peak_offset, bin_counts, bin_edges, bin_res)
-        if offset < 0:
-            offset += row_width/2
+        collision_rate = self.collision_ctr - self.collision_ctr_previous
+        if collision_rate == 0:
+            if rospy.Time.now() - self.time_start_reset_scan_dots > rospy.Duration.from_sec(collision_reset_time):
+                self.collision_ctr = 0
+                self.collision_ctr_previous = 0
+                print("reset collisions")
         else:
-            offset -= row_width/2
-        end_of_row = check_end_of_row(scan, -np.pi/2, np.pi/2, 3.0, 20)      
-    else:
-        pass
+            self.time_start_reset_scan_dots = rospy.Time.now()
+        return robot_running_crazy
     
-def state_in_row(pub_vel):
-    global row_width
-    global p_gain_angle_factor
-    global p_gain_offset_factor
-    global ctrl_by_angle
-    global ctrl_by_offset
-    global max_lin_vel
-    global end_of_row
-    global time_start
+    def laser_box(self, scan, x_min, x_max, y_min, y_max):
+        xy_all = self.scan2cart_wo_ign(scan)
+        allow_x1 = xy_all[0,:] > x_min
+        allow_x2 = xy_all[0,:] < x_max
+        allow_x = np.logical_and(allow_x1, allow_x2)
 
-    setpoint_angle = 0;                         # [rad]
-    setpoint_offset = 0;                         # [m]
-    error_angle = setpoint_angle - angle_valid
-    error_offset = setpoint_offset - offset_valid
+        allow_y1 = xy_all[1,:] > y_min
+        allow_y2 = xy_all[1,:] < y_max
+        allow_y = np.logical_and(allow_y1, allow_y2)
 
-    max_angular_z = np.pi/2;                    # [rad/s]
-    max_angle = np.pi/4;                        # [rad]
-    max_offset = row_width/2;                    # [m]
-    p_gain_angle = max_angular_z/max_angle*p_gain_angle_factor;     # = 2.0
-    p_gain_offset = max_angular_z/max_offset*p_gain_offset_factor;     # = 4.19
+        allow = np.logical_and(allow_x, allow_y)
+        return xy_all[:, allow]
 
-    act_angle = p_gain_angle*error_angle
-    act_offset = -p_gain_offset*error_offset
-    
-    # normed_angle_abs = np.abs(angle_valid / max_angle)
-    # normed_offset_abs = np.abs(offset_valid / max_offset)
-    # normed_angle_abs = clip(normed_angle_abs, 1.0, 0.0)
-    # normed_offset_abs = clip(normed_offset_abs, 1.0, 0.0)
-    # normed_deviation = (normed_angle_abs + normed_offset_abs) / 2
-    cmd_vel = Twist()
-    # cmd_vel.linear.x = max_lin_vel * (normed_deviation - 1)**2
-    cmd_vel.linear.x = 0.3
-    # np.set_printoptions(precision=1)
-    # print('{:6.2f}, {:6.2f}, {:6.2f}, {:6.2f}'.format(normed_angle_abs, normed_offset_abs, normed_deviation, max_lin_vel * (1 - normed_deviation)))
-    if ctrl_by_angle and not ctrl_by_offset:
-        cmd_vel.angular.z = act_angle
-    elif ctrl_by_offset and not ctrl_by_angle:
-        cmd_vel.angular.z = act_offset
-    else:
-        cmd_vel.angular.z = act_angle/2 + act_offset/2
+    def move_robot(self, pub, distance, angle, period):
+        """
+        Module that translates the robot according to a distance and rotates it
+        according to an angle in a given period of time.
+        param1 pub:         [publisher] ROS publisher on topic /cmd_vel
+        param2 distance:    [m] distance the robot is to move in x-direction
+        param3 angle:       [rad] yaw angle the robot is to turn around z-axis
+        param4 period:      [s] time period available for the movement
+        return:             nothing
+        """
+        cmd_vel = Twist()
+        cmd_vel.linear.x = distance / period
+        cmd_vel.angular.z = angle / period
+        pub.publish(cmd_vel)
+        return None
 
-    pub_vel.publish(cmd_vel)        
-    # print(offset_valid, act_offset)
-    # print(angle_valid, act_angle)
-    if end_of_row:
-        time_start = rospy.Time.now()
-        print("angle_valid", np.degrees(angle_valid), "offset_valid", offset_valid)
-        return "state_turn_exit_row"
-        # return "state_turn_to_next_row"
-    else:
-        return "state_in_row"
-
-def state_turn_exit_row(pub_vel):
-    global path_pattern
-    global row_width
-    global turn_l
-    global turn_r  
-    global time_start
-    global angle_valid
-    global offset_valid
-
-    if len(path_pattern) > 0:
-        # extract next turn from path pattern
-        # and check direction ('L' or 'R' ?)
-        which_turn = path_pattern[1]
-        if which_turn == 'L':
-            turn = turn_l
-        elif which_turn == 'R':
-            turn = turn_r
+    def clip(self, val, max_val, min_val):
+        if val > max_val:
+            return max_val
+        elif val < min_val:
+            return min_val
         else:
-            rospy.logerr("Path pattern syntax error: undefined parameter '%s' for turn specification!", which_turn)
+            return val    
+
+    def laser_callback(self, scan):
+        self.scan = scan
+        return None
+
+    ##########################################
+    ######### States of Statemachine #########
+    ##########################################
+    def state_wait_at_start(self, pub_vel):
+        # This is because the robot falls down when launching the simulation.
+        # Therefore we need to wait until the robot has come down.
+        cmd_vel = Twist()
+        cmd_vel.linear.x = 0.0
+        cmd_vel.angular.z = 0.0
+        pub_vel.publish(cmd_vel)
+        t = 5.0 # [s] period of time that the robot waits before entering the first row
+        if rospy.Time.now() - self.time_start > rospy.Duration.from_sec(t):                
+            return "state_in_row"
+        else:
+            return "state_wait_at_start"
+
+    def state_in_row(self, pub_vel):
+        # TODO:
+        # bring angular velocity in dependence of max_lin_vel_in_row
+        
+        # # This has been replaced by the two laser boxes
+        # angle_increment = self.scan.angle_increment
+        # angle_outer_limit_curr = self.scan.angle_max
+        # angle_outer_limit_targ = np.radians(135)
+        # angle_inner_limit_targ = np.radians(22.5)
+        # idx_ranges_outer = int(np.round((angle_outer_limit_curr - angle_outer_limit_targ) / angle_increment) + 1)
+        # idx_ranges_inner = int(np.round((angle_outer_limit_curr - angle_inner_limit_targ) / angle_increment) + 1)
+        # scan_cart = self.scan2cart_w_ign(self.scan, min_range=0.0, max_range=self.row_width)
+        # self.scan_left = scan_cart[:, -idx_ranges_inner:-idx_ranges_outer]
+        # self.scan_right = scan_cart[:, idx_ranges_outer:idx_ranges_inner]
+
+        self.scan_left = self.laser_box(self.scan, -1.0, 1.4, self.robot_width/2, self.row_width)
+        self.scan_right = self.laser_box(self.scan, -1.0, 1.4, -self.row_width, -self.robot_width/2)
+
+        mean_left = np.nanmean(self.scan_left[1, :])
+        mean_right = np.nanmean(self.scan_right[1, :])
+
+        print ("scan_right", self.scan_right[1, :])
+        print ("scan_left", self.scan_left[1, :])
+
+        print ("mean_left: ", mean_left)
+        print ("mean_right: ", mean_right)
+        
+        # # Solution for driving on row instead of in between rows
+        # # This also lead to some errors when some plants of a row are missing
+        # # and the robot can see the other row as well
+        # if mean_left - mean_right > 1.2*self.row_width:            
+        #     if abs(mean_left) < abs(mean_right):
+        #         mean_right = -self.row_width +  mean_left
+        #     elif abs(mean_right) < abs(mean_left):
+        #         mean_left = self.row_width + mean_right
+
+        # # Solution for having one mean determined wrongly
+        # # This did not work because the robot did not drive a curve
+        # if abs(mean_left) > 1.2*self.row_width/2:
+        #     mean_left = self.row_width + mean_right
+        # if abs(mean_right) > 1.2*self.row_width/2:
+        #     mean_right = -self.row_width + mean_left
+        # print("mean_left", mean_left, "mean_right", mean_right)
+
+        # Solution for not having a row on one or both of the sides
+        if np.isnan(mean_left) and not np.isnan(mean_right):
+            offset = mean_right + self.row_width/2
+        elif np.isnan(mean_right) and not np.isnan(mean_left):
+            offset = mean_left - self.row_width/2
+        elif not np.isnan(mean_right) and not np.isnan(mean_left):
+            offset = mean_right + mean_left
+        else:
+            # If the determined mean are not a number (nan) a warning is raised and
+            # the controller offset of 0.0
+            offset = 0.0
+            self.offset_valid = 0.0          
+
+        alpha = 0.2
+        self.offset_valid = alpha * self.offset_valid + (1-alpha) * offset
+        
+        max_offset = self.row_width/2 # [m] maximum mid-row-offset possible
+        normed_offset = self.offset_valid / max_offset
+        normed_offset = self.clip(normed_offset, 1.0, -1.0)
+        cmd_vel = Twist()
+        #cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - normed_offset**2)
+        #cmd_vel.angular.z = self.max_ang_vel_robot * np.sign(normed_offset) * normed_offset**2
+        cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - np.abs(normed_offset))
+        cmd_vel.angular.z = self.max_ang_vel_robot * normed_offset
+        pub_vel.publish(cmd_vel)
+
+        end_of_row = self.detect_row_end()
+        robot_running_crazy = self.detect_robot_running_crazy(self.scan, collisions_thresh=100, collision_reset_time=2.0)
+
+        if robot_running_crazy:
             return "state_error"
-        
-        ang_z = turn - angle_valid              # [rad]
-        radius = (row_width - offset_valid) / 2 # [m]
-        dist_x = radius * abs(ang_z)            # [m]
-        t = 5.0                                 # [s]
-        move_robot(pub_vel, dist_x, ang_z, t, time_start)
-        
-        if rospy.Time.now() - time_start > rospy.Duration.from_sec(t):            
-            # if the robot is to enter one of the neighbouring rows
-            # it skips the state of moving a straight distance
-            which_row = int(path_pattern[0])
-            time_start = rospy.Time.now()
-            if which_row == 1:
-                return "state_turn_enter_row"
+        elif end_of_row:
+            # Check if path pattern has already been completed
+            if len(self.path_pattern) > 0:
+                return "state_turn_exit_row"
             else:
-                return "state_go_straight"
+                "state_finished"
         else:
-            return "state_turn_exit_row"
-    else:
-        return "state_done"
+            return "state_in_row"
 
-def state_go_straight(pub_vel):
-    global path_pattern
-    global row_width
-    global time_start
+    def state_turn_exit_row(self, pub_vel):
+        # TODO: 
+        # take the linear velocity the robot has at the end of the row
+        
+        # Extract scan points out of a rectangular box. This box is 
+        # placed around the robot with itself lying in the center.
+        # The scan points falling in this box are evaluated:
+        # use the mean of x-coordinates to turn out of the row correctly
 
-    # extract straight distance from path pattern
-    which_row = int(path_pattern[0])
+        self.xy_scan_raw = self.scan2cart_w_ign(self.scan, max_range=30.0)
 
-    ang_z = 0.0                         # [rad]
-    dist_x = (which_row-1)*row_width    # [m]
-    t = 5.0 * which_row              # [s]
-    move_robot(pub_vel, dist_x, ang_z, t, time_start)
-
-    if rospy.Time.now() - time_start > rospy.Duration.from_sec(t):                
-            return "state_crop_path_pattern"
-    else:
-        return "state_turn_enter_row"
-  
-
-def state_turn_enter_row(pub_vel):
-    global path_pattern
-    global row_width
-    global turn_l
-    global turn_r  
-    global time_start
-
-    if len(path_pattern) > 0:
         # extract next turn from path pattern
         # and check direction ('L' or 'R' ?)
-        which_turn = path_pattern[1]
+        which_turn = self.path_pattern[1]
         if which_turn == 'L':
-            turn = turn_l
+            turn = self.turn_l
+            radius = self.row_width/2 + self.offset_valid
+            y_min = 0.0
+            y_max = 2.5
         elif which_turn == 'R':
-            turn = turn_r
-        else:
-            rospy.logerr("Path pattern syntax error: undefined parameter '%s' for turn specification!", which_turn)
-            return "state_error"
+            turn = self.turn_r
+            radius = self.row_width/2 - self.offset_valid
+            y_min = -2.5
+            y_max = 0.0
 
-        ang_z = turn                    # [rad]
-        radius = row_width/2            # [m]
-        dist_x = radius * abs(ang_z)    # [m]
-        t = 5.0                         # [s]
-        move_robot(pub_vel, dist_x, ang_z, t, time_start)
-        
-        if rospy.Time.now() - time_start > rospy.Duration.from_sec(t):                
-                return "state_crop_path_pattern"
+        # the robot has always to see an uneven number of rows
+        x_min = -1.5*self.row_width
+        x_max = 1.5*self.row_width
+        self.laser_box_drive_headland = self.laser_box(self.scan, x_min, x_max, y_min, y_max)
+        self.x_means.append(np.mean(self.laser_box_drive_headland[0,:]))
+        self.x_mean = np.mean(self.x_means) 
+
+        # TODO:
+        # angular velocity determined by linear velocity in rosparam or last cmd_vel.lin.x
+        ang_z = turn                            # [rad]
+        dist_x = radius * abs(ang_z)            # [m]
+        t = self.time_for_quater_turn           # [s]
+
+        # Check if the same row is to be entered again (-> 0)
+        # If this is the case, we want the robot to turn in place
+        # and therefore have no linear velocity but only
+        # angular velocity. Thus, we set the distance in x direction
+        # to zero.
+        which_row = int(self.path_pattern[0])
+        if which_row == 0:
+            dist_x = 0.0
+
+        x_close_to_zero = abs(self.x_mean) < 0.1
+        x_zero_crossing = self.x_mean*self.x_mean_old < 0.0
+        if x_close_to_zero or x_zero_crossing:
+            self.time_start = rospy.Time.now()
+            # reset variable
+            self.x_mean_old = 0.0
+            return "state_headlands"
         else:
+            self.move_robot(pub_vel, dist_x, ang_z, t)
+            self.x_mean_old = self.x_mean
+            return "state_turn_exit_row"
+
+    def state_headlands(self, pub_vel):
+        # TODO:
+        # take the linear velocity the robot has at the end of the turn
+        # increase width of laser_box_detect_row so that even shortened row ends will be detected
+
+        # Extract scan points out of a rectangular box. This box is 
+        # placed around the robot with itself lying in the center.
+        # The scan points falling in this box are evaluated:
+        # use the mean of x coordinates to control the robot to pass by
+
+        self.xy_scan_raw = self.scan2cart_w_ign(self.scan, max_range=30.0)
+        # the robot has always to see an uneven number of rows
+        x_min_drive_headland = -1.5*self.row_width
+        x_max_drive_headland = 1.5*self.row_width
+        which_turn = self.path_pattern[1]
+        if which_turn == 'L':
+            y_min_drive_headland = 0.0
+            y_max_drive_headland = 2.0
+            turn_sign = 1.0
+        elif which_turn == 'R':
+            y_min_drive_headland = -2.0
+            y_max_drive_headland = 0.0
+            turn_sign = -1.0
+        self.laser_box_drive_headland = self.laser_box(self.scan, x_min_drive_headland, x_max_drive_headland, y_min_drive_headland, y_max_drive_headland)
+        self.x_means.append(np.mean(self.laser_box_drive_headland[0,:]))
+        self.y_means.append(np.mean(self.laser_box_drive_headland[1,:]))
+        self.x_mean = np.mean(self.x_means)
+        self.y_mean = np.mean(self.y_means)     
+        
+        # Extract scan points out of rectangular box.
+        # This box is placed in front of the robot so that
+        # it sees the end of a row when passing by in headland.
+        # It is dependent on the direction of the turn defined
+        # by the path pattern: If the robot exited a row via
+        # a left turn, the box is set to the left. If the robot
+        # exited a row via a right turn, the box is set to the right.
+        # This prevents the robot from accidently seeing the qr-code 
+        # tower as a corn row.
+
+        box_height = self.row_width/3
+        box_width = 3.0 # in case the robot is 1 m within headland and 1 m of plants are missing at the end of the row
+        x_min_detect_row = self.row_width - self.x_front_laser_in_base_link - box_height/2
+        x_max_detect_row = self.row_width - self.x_front_laser_in_base_link + box_height/2
+        which_turn = self.path_pattern[1]
+        if which_turn == 'L':
+            y_min_detect_row = 0.0
+            y_max_detect_row = box_width
+        elif which_turn == 'R':
+            y_min_detect_row = -box_width
+            y_max_detect_row = 0.0
+        self.laser_box_detect_row = self.laser_box(self.scan, x_min_detect_row, x_max_detect_row, y_min_detect_row, y_max_detect_row)
+
+        # Count the scan points within the defined box and
+        # identify whether a row is seen or the space in between.
+        # TODO:
+        # bestimme thresholds emprisch
+        upper_thresh_scan_points = 20
+        lower_thresh_scan_points = 10
+        num_scan_dots = self.laser_box_detect_row.shape[1]
+        there_is_row = num_scan_dots > upper_thresh_scan_points
+        there_is_no_row = num_scan_dots < lower_thresh_scan_points
+        print("row detection dots", num_scan_dots)
+
+        # Count the transitions 
+        # from seeing a row to seeing the space in between or 
+        # from seeing the space in between to seeing a row.        
+        if (there_is_no_row and self.trans_row2norow) or self.there_was_no_row:
+            self.there_was_no_row = True
+            if there_is_row:
+                self.ctr_trans_norow2row += 1
+                print("no row -> row")
+                self.there_was_no_row = False
+                self.trans_norow2row = True
+                self.trans_row2norow = False
+
+        if (there_is_row and self.trans_norow2row) or self.there_was_row:
+            self.there_was_row = True
+            if there_is_no_row:
+                self.ctr_trans_row2norow += 1
+                print("row -> no row")
+                self.there_was_row = False
+                self.trans_norow2row = False
+                self.trans_row2norow = True
+        
+        # If the robot has go to e.g. the 3rd row on the left side,
+        # the following transitions must be detected in order to
+        # be able to turn into this row:
+        # row --> no row (this one is skipped)
+        # no row --> row
+        # row --> no row
+        # no row --> row
+        # Thus, we have 2 * 3rd row - 3 = 3 transitions
+        sum_transitions = self.ctr_trans_row2norow + self.ctr_trans_norow2row
+        which_row = int(self.path_pattern[0])
+        set_transitions = 2 * which_row - 3
+
+        target_row_reached = sum_transitions >= set_transitions
+        if target_row_reached:
+            self.there_was_row = False
+            self.there_was_no_row = False
+            self.trans_norow2row = False
+            self.trans_row2norow = True
+            self.ctr_trans_row2norow = 0
+            self.ctr_trans_norow2row = 0
             return "state_turn_enter_row"
-    else:
-        return "state_done"
-
-def move_robot(pub, distance, angle, period, start_time):
-    """
-    Module that translates the robot according to a distance and rotates it
-    according to an angle in a given period of time.
-    param1 pub:         [publisher] ROS publisher on topic /cmd_vel
-    param2 distance:    [m] distance the robot is to move in x-direction
-    param3 angle:       [rad] yaw angle the robot is to turn around z-axis
-    param4 period:      [s] time period available for the movement
-    param5 start_time:  [time] ros.Time.now() of the beginning of the movement
-    return:             nothing
-    """
-    cmd_vel = Twist()
-    cmd_vel.linear.x = distance / period
-    cmd_vel.angular.z = angle / period
-    pub.publish(cmd_vel)
-    print("Progress movement [%]: ", (rospy.Time.now() - start_time) / rospy.Duration.from_sec(period) * 100)
-    return None
-
-def state_crop_path_pattern():
-    global path_pattern
-    # remove executed turn from path pattern
-    path_pattern = path_pattern[2::]
-    return "state_in_row"
-
-def state_go_straight_movebase():
-    global path_pattern
-    global row_width
-    global time_start
-
-    # extract straight distance from path pattern
-    which_row = int(path_pattern[0])
-    dist_x = (which_row-1)*row_width
-    dist_y = 0.0
-    ang_z = 0.0
-    
-    # but if the robot is to enter another row,
-    # it firstly needs to drive to that row before turning into it
-    result_straight = movebase_client(dist_x, dist_y, ang_z)
-    if result_straight:
-        rospy.logwarn("Straight goal execution done!")
-        time_start = rospy.Time.now()
-        return "state_turn_enter_row"
-    else:
-        rospy.logerr("Straight goal not reached!")
-        return "state_error"
-
-def tf_point_to_center_line(angle, offset, x, y, gamma):
-    """
-    The Robot has finished a row and the last angle and distance
-    to the center line has been angle and offset respectively.
-    This function transforms the position of a point lying in 
-    a frame with its x-axis at the center line to the robot
-    base_link frame.
-    inputs:
-    param1 angle:   the angle of center line to robot frame x-axis
-    param2 offset:   the perpendicular distance between center line and robot frame origin
-    param3 x:       the desired distance in x-direction (on center line)
-    param4 y:       the desired distance in y-direction (perpedicular to center line)
-    param5 gamma:   the desired orientation counter clockwise (from center line)
-    outputs:
-    x_new:          the x-coordinate in robot frame
-    y_new:          the y-coordinate in robot frame
-    gamma_new:      the orientation in robot frame
-    """
-    x_new = x*np.cos(angle) + y*np.sin(angle) - offset*np.sin(angle)
-    y_new = -x*np.sin(angle) + y*np.cos(angle) - offset*np.cos(angle)
-    gamma_new = gamma - angle
-    return (x_new, y_new, gamma_new)
-
-def state_turn_row_movebase():
-    global path_pattern
-    global row_width
-    global angle_valid
-    global offset_valid
-    lin_row_enter = 1.0     # [m]
-    lin_row_exit = 1.0      # [m]
-    turn_l = np.pi/2        # [rad]
-    turn_r = -np.pi/2       # [rad]
-
-    if len(path_pattern) > 0:
-        which_row = path_pattern[0]
-        which_turn = path_pattern[1]
-
-        if which_turn == 'L':
-            turn = turn_l
-        elif which_turn == 'R':
-            turn = turn_r
         else:
-            rospy.logerr("Path pattern syntax error: undefined parameter '%s' for turn specification!", which_turn)
-            return "error"
-
-        try:
-            which_row = int(which_row)
-        except ValueError:
-            rospy.logerr("Path pattern syntax error: non-integer value for row specification!")
-            return "state_error"
-
-        point = tf_point_to_center_line(angle_valid, offset_valid, lin_row_exit, 0.0, 0.0)
-        result_straight = movebase_client(point[0], point[1], point[2])
-        if result_straight:
-            rospy.logwarn("1. Straight goal execution done!")
-        else:
-            rospy.logerr("1. Straight goal not reached!")
-            return "state_error"
-        
-        result_turn = movebase_client(0, 0, turn)
-        if result_turn:
-            rospy.logwarn("2. In-place-turn goal execution done!")
-        else:
-            rospy.logerr("2. In-place-turn goal not reached!")
-            return "state_error"
-
-        result_straight = movebase_client(which_row*row_width, 0.0, 0.0)
-        if result_straight:
-            rospy.logwarn("3. Straight goal execution done!")
-        else:
-            rospy.logerr("3. Straight goal not reached!")
-            return "state_error"
-
-        result_turn = movebase_client(0.0, 0.0, turn)
-        if result_turn:
-            rospy.logwarn("4. In-place-turn goal execution done!")
-        else:
-            rospy.logerr("4. In-place-turn goal not reached!")
-            return "state_error"
-
-        result_straight = movebase_client(lin_row_enter, 0, 0)
-        if result_straight:
-            rospy.logwarn("5. Straight goal execution done!")
-        else:
-            rospy.logerr("5. Straight goal not reached!")
-            return "state_error"
-
-        return "state_crop_path_pattern"
-    else:
-        return "state_done"
-
-def movebase_client(lin_x, lin_y, ang_z):
-    client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
-    client.wait_for_server()
-
-    goal = MoveBaseGoal()
-    goal.target_pose.header.frame_id = "base_link"
-    goal.target_pose.header.stamp = rospy.Time.now()
-    goal.target_pose.pose.position.x = lin_x
-    goal.target_pose.pose.position.y = lin_y
-    q_rot = quaternion_from_euler(0.0, 0.0, ang_z)
-    goal.target_pose.pose.orientation.x = q_rot[0]
-    goal.target_pose.pose.orientation.y = q_rot[1]
-    goal.target_pose.pose.orientation.z = q_rot[2]
-    goal.target_pose.pose.orientation.w = q_rot[3]
-
-    client.send_goal(goal)
-    wait = client.wait_for_result()
-    if not wait:
-        rospy.logerr("Action server not available!")
-        rospy.signal_shutdown("Action server not available!")
-    else:
-        return client.get_result()
-        
-
-def state_idle():
-    pass
-    return "state_idle"
-
-def state_error():
-    pass
-    return "state_done"
-
+            # The robot is passing by some rows.
+            # When the current section of path pattern is e.g. 3L,
+            # it passes by the first and second row on the left
+            # in order to turn into the third one.
+            # While passing by the robot is not ought to drive blindly
+            # but controlled. For doing so we evaluate the mean
+            # of the x-coordinates of all scan points that are
+            # in our scan box which is placed around the robot
+            # (see laser_callback). As long as the x-mean is around
+            # zero, the robot is passing by the desired rows
+            # orthogonally.
             
-angle = 0.0
-row_width = 0.75
-turn_l = np.pi/2
-turn_r = -np.pi/2
-lin_row_exit = 1.0
-lin_row_enter = lin_row_exit
-state = "state_in_row" 
+            setpoint_orient = 0                          # [rad]
+            setpoint_offset = turn_sign*self.row_width/2          # [m]
+            error_orient= setpoint_orient - self.x_mean
+            if turn_sign >= 0: # left turn
+                error_offset = setpoint_offset - np.min(self.laser_box_drive_headland[1,:])
+            else: # right turn
+                error_offset = setpoint_offset - np.max(self.laser_box_drive_headland[1,:])
 
-row_width = 0.75
-turn_l = np.pi/2
-turn_r = -np.pi/2
-state = "state_in_row"
-angle = 0.0
-offset = 0.0
-angle_valid = 0.0
-offset_valid = 0.0
-p_gain_angle_factor = 0.0
-p_gain_offset_factor = 0.0
-ctrl_by_angle = True
-ctrl_by_offset = True
-max_lin_vel = 0.0
-end_of_row = False
-end_row_ctr = 0
-path_pattern = ""
-time_start = 0.0
-xy_coords1 = np.zeros((10,2))
-xy_coords2 = np.zeros((10,2))
+            act_orient = turn_sign * self.p_gain_orient_headland*error_orient
+            act_offset = -self.p_gain_offset_headland*error_offset          
+
+            # # TODO:
+            # # have a look at the exakt x_mean and set max_offset, make max_offset dependent on box width
+            cmd_vel = Twist()
+            cmd_vel.linear.x = self.max_lin_vel_in_headland
+            print("miny", np.min(self.laser_box_drive_headland[1,:]),"error_offset",error_offset, "act_offset", act_offset)
+            alpha = 0.4
+            cmd_vel.angular.z = alpha*act_offset + (1-alpha)*act_orient
+            pub_vel.publish(cmd_vel)  
+            return "state_headlands"
+
+    def state_turn_enter_row(self, pub_vel):
+        # Extract scan points out of a rectangular box. This box is 
+        # placed around the robot with itself lying in the center.
+        # The scan points falling in this box are evaluated:
+        # use the mean of y-coordinates to turn out of the row correctly
+
+        self.xy_scan_raw = self.scan2cart_w_ign(self.scan, max_range=30.0)
+        # the robot has always to see an uneven number of rows
+        x_min = 0.0
+        x_max = 2.5
+        y_min = -1.5*self.row_width
+        y_max = 1.5*self.row_width
+        self.laser_box_drive_headland = self.laser_box(self.scan, x_min, x_max, y_min, y_max)
+        self.y_means.append(np.mean(self.laser_box_drive_headland[1,:]))
+        self.y_mean = np.mean(self.y_means) 
+
+        # extract next turn from path pattern
+        # and check direction ('L' or 'R' ?)
+        which_turn = self.path_pattern[1]
+        if which_turn == 'L':
+            turn = self.turn_l
+        elif which_turn == 'R':
+            turn = self.turn_r
+
+        ang_z = turn                            # [rad]
+        dist_x = self.row_width/2 * abs(ang_z)  # [m]
+        t = self.time_for_quater_turn           # [s]
+
+        # Check if the same row is to be entered again (-> 0)
+        # If this is the case, we want the robot to turn in place
+        # and therefore have no linear velocity but only
+        # angular velocity. Thus, we set the distance in x direction
+        # to zero.
+        which_row = int(self.path_pattern[0])
+        if which_row == 0:
+            dist_x = 0.0
+
+        y_close_to_zero = abs(self.y_mean) < 0.1
+        y_zero_crossing = self.y_mean*self.y_mean_old < 0.0
+        if y_close_to_zero or y_zero_crossing:
+            # reset variable
+            self.y_mean_old = 0.0
+            return "state_crop_path_pattern"
+        else:
+            self.move_robot(pub_vel, dist_x, ang_z, t)
+            self.y_mean_old = self.y_mean
+            return "state_turn_enter_row"
+
+    def state_crop_path_pattern(self):
+        # remove executed turn from path pattern
+        self.path_pattern = self.path_pattern[2::]
+        return "state_in_row" 
+
+    def state_idle(self, pub_vel):
+        cmd_vel = Twist()
+        cmd_vel.linear.x = 0.0
+        cmd_vel.angular.z = 0.0
+        pub_vel.publish(cmd_vel)
+        return "state_idle"
+
+    def state_error(self):
+        print("An error has occured and the robot is in safeguard stop.")
+        return "state_finished"
+    
+    def state_finished(self, pub_vel):
+        cmd_vel = Twist()
+        cmd_vel.linear.x = 0.0
+        cmd_vel.angular.z = 0.0
+        pub_vel.publish(cmd_vel)
+        return "state_done"
+
+    ###########################################
+    ######### The Statemachine itself #########
+    ###########################################
+
+    def launch_state_machine(self):
+        rate = rospy.Rate(10)
+        # fig = plt.figure(figsize=(7,20))
+        while not rospy.is_shutdown() and self.state != "state_done":
+            if self.state == "state_wait_at_start":
+                self.state = self.state_wait_at_start(self.pub_vel)
+            elif self.state == "state_in_row":
+                self.state = self.state_in_row(self.pub_vel)
+            elif self.state == "state_turn_exit_row":
+                self.state = self.state_turn_exit_row(self.pub_vel)
+            elif self.state == "state_headlands":
+                self.state = self.state_headlands(self.pub_vel)
+            elif self.state == "state_turn_enter_row":
+                self.state = self.state_turn_enter_row(self.pub_vel)    
+            elif self.state == "state_crop_path_pattern":
+                self.state = self.state_crop_path_pattern()
+            elif self.state == "state_idle":
+                self.state = self.state_idle(self.pub_vel)
+            elif self.state == "state_finished":
+                self.state = self.state_finished(self.pub_vel)
+            elif self.state == "state_error":
+                self.state = self.state_error()
+            else:
+                self.state = "state_done"
+            print(self.state)
+            rate.sleep()
+
+            # resolution = 0.10
+            # hist_min = -1.5*self.row_width
+            # hist_max = 1.5*self.row_width
+            # bins = int(round((hist_max - hist_min) / resolution))
+
+            # plt.subplot(311)
+            # plt.hist(self.laser_box_drive_headland[0,:], bins, label='x', range=[hist_min, hist_max], density=True)
+            # plt.axvline(self.x_mean, color='r', linestyle='dashed', linewidth=2)
+            # plt.legend(loc='upper left')
+
+            # plt.subplot(312)
+            # plt.hist(self.laser_box_drive_headland[1,:], bins, label='y', range=[hist_min, hist_max], density=True)
+            # plt.axvline(self.y_mean, color='r', linestyle='dashed', linewidth=2)
+            # plt.legend(loc='upper left')
+
+            # ax1 = plt.subplot(313, aspect='equal')
+            # ax1.set_xlim([-2, 2])
+            # ax1.set_ylim([-2, 2])
+            # plt.grid(color='k', alpha=0.5, linestyle='dashed', linewidth=0.5)
+            # plt.plot(self.scan_left[0,:],self.scan_left[1,:], "ob")
+            # plt.plot(self.scan_right[0,:],self.scan_right[1,:], "oy")
+            # plt.plot(self.x_mean, self.y_mean, "or")
+            # plt.draw()
+            # plt.pause(0.05)
+            # fig.clear()      
+        print("Moving robot according to path pattern completed.")
+        return None
 
 if __name__ == '__main__':
     rospy.init_node('path_planning', anonymous=True)
-    sub_laser = rospy.Subscriber("/laser_scanner_front", LaserScan, laser_callback)
-    pub_vel = rospy.Publisher("cmd_vel", Twist, queue_size=1)
-    rate = rospy.Rate(10)
 
-    path_pattern = rospy.get_param('~path_pattern')
-    path_pattern = path_pattern.replace("-", "")    # remove hyphens: S-1L-2L-1L-1R-F --> S1L2L1L1RF
-    path_pattern = path_pattern[1:-1]               # remove S (Start) and F (Finish): S1L2L1L1RF --> 1L2L1L1R
-    # TODO: Check row pattern if correct
-    p_gain_angle_factor = rospy.get_param('~p_gain_angle_factor')
-    p_gain_offset_factor = rospy.get_param('~p_gain_offset_factor')
-    ctrl_by_angle = rospy.get_param('~ctrl_by_angle')
-    ctrl_by_offset = rospy.get_param('~ctrl_by_offset')
-    max_lin_vel = rospy.get_param('~max_lin_vel')
-
-    fig = plt.figure()
-    while not rospy.is_shutdown() and state != "state_done":
-        if state == "state_in_row":
-            state = state_in_row(pub_vel)
-        elif state == "state_turn_exit_row":
-            state = state_turn_exit_row(pub_vel)
-        elif state == "state_go_straight":
-            state = state_go_straight(pub_vel)
-        elif state == "state_turn_enter_row":
-            state = state_turn_enter_row(pub_vel)
-        elif state == "state_go_straight_movebase":
-            state = state_go_straight_movebase()
-        elif state == "state_turn_row_movebase":
-            state = state_turn_row_movebase()
-        elif state == "state_crop_path_pattern":
-            state = state_crop_path_pattern()
-        elif state == "state_idle":
-            state = state_idle()
-        elif state == "state_error":
-            state = state_error()
-        else:
-            state = "state_done"
-        print(state)
-
-        plt.plot(xy_coords1[:,0], xy_coords1[:,1], "ob", label="xy_coords1")
-        plt.plot(xy_coords2[:,0], xy_coords2[:,1], "xr", label="xy_coords2")
-        plt.draw()
-        plt.pause(0.05)
-        fig.clear()        
-        
-        rate.sleep()
+    move_robot = MoveRobotPathPattern()
+    move_robot.launch_state_machine()
