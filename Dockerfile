@@ -42,7 +42,8 @@ RUN apt-get -y remove curl
 
 # Copy the content of the src folder into the container in the folder '/catkin/src'. You can replace this by cloning your workspace from GIT
 # using 'RUN git clone https://github.com/my-robot-repository /catkin' if you like, but be sure to put the files in a folder named '/catkin'! 
-COPY src /catkin/src
+# COPY src /catkin/src
+RUN git clone https://github.com/Euleeee/Floribot_Simulation.git /catkin
 
 # Install the dependencies of the repository that are listed in the packages.xml files.
 RUN apt-get update && \

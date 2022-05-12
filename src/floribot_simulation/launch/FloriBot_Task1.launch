@@ -27,6 +27,7 @@
   <include file="$(find realsense2_camera)/launch/rs_camera.launch"></include>
   <include file="$(find base)/launch/base_node.launch"></include>
   <include file="$(find base2gazebo)/launch/base2gazebo.launch"></include>
+  <include file="$(find path_planning)/launch/move_robot_path_pattern.launch"></include>
   
   <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
 
