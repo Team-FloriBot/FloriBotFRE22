@@ -26,9 +26,9 @@
 <xacro:property name="laser_height" value="0.03" />
 
 <!-- Kameraparameter -->
-<xacro:property name="x_camera_front" value="0.29" />
-<xacro:property name="x_camera_back" value="-0.315" />
-<xacro:property name="camera_height" value="0.275" />
+<xacro:property name="x_camera_front" value="0.3220" />
+<xacro:property name="x_camera_back" value="-0.347" />
+<xacro:property name="camera_height" value="0.267" />
 <xacro:property name="camera_angle" value="0.26" />
 
 
@@ -120,6 +120,54 @@
   <xacro:sensor_d435i name="front_camera" parent="base_link">
     <origin xyz="${x_camera_front} 0 ${camera_height}" rpy="0 ${camera_angle} 0"/>
   </xacro:sensor_d435i>
+
+  <link name="CameraFrontPositiv">
+      <visual>
+    	  <origin xyz="${len_wagen_vorne/2-0.06} -0.0225 ${height_wagen*2/3+0.033}" rpy="0 1.57 0"/>
+        <axis xyz="0 0 0"/>
+          <geometry>
+              <!-- <box size="${len_wagen_vorne} ${width_wagen} ${height_wagen}"/> -->
+              <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_positiv.stl" scale="0.001 0.001 0.001" />
+          </geometry>
+          <material name="c">
+              <color rgba="0 0.9 0.9 1.0"/>
+          </material>
+      </visual>
+	  <inertial>
+		<mass value="0.1"/>
+        <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+      </inertial>
+  </link>
+
+  <joint name="jointCameraFrontPositiv" type="fixed">
+       <parent link="base_link"/>
+       <child link="CameraFrontPositiv"/>
+	   <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="CameraFrontNegativ">
+      <visual>
+    	  <origin xyz="${len_wagen_vorne/2} -0.006 ${height_wagen*2/3+0.0410}" rpy="${-camera_angle-1.57} 0 -1.57"/>
+        <axis xyz="0 0 0"/>
+          <geometry>
+              <!-- <box size="${len_wagen_vorne} ${width_wagen} ${height_wagen}"/> -->
+              <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_negativ.stl" scale="0.001 0.001 0.001" />
+          </geometry>
+          <material name="c">
+              <color rgba="0 0.9 0.9 1.0"/>
+          </material>
+      </visual>
+	  <inertial>
+		<mass value="0.1"/>
+        <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+      </inertial>
+  </link>
+
+  <joint name="jointCameraFrontNegativ" type="fixed">
+       <parent link="CameraFrontPositiv"/>
+       <child link="CameraFrontNegativ"/>
+	   <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
 
   <!-- Laserscanner vorne -->
   <joint name="joint_front_laser" type="fixed">
@@ -277,6 +325,55 @@
   <xacro:sensor_d435i name="rear_camera" parent="Hinterwagen">
     <origin xyz="${x_camera_back} 0 ${camera_height}" rpy="0 ${camera_angle} 3.14"/>
   </xacro:sensor_d435i>
+
+  <link name="CameraRearPositiv">
+      <visual>
+    	  <origin xyz="${-len_wagen_hinten/2+0.021} +0.0225 ${height_wagen*2/3+0.033}" rpy="0 1.57 3.141"/>
+        <axis xyz="0 0 0"/>
+          <geometry>
+              <!-- <box size="${len_wagen_vorne} ${width_wagen} ${height_wagen}"/> -->
+              <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_positiv.stl" scale="0.001 0.001 0.001" />
+          </geometry>
+          <material name="c">
+              <color rgba="0 0.9 0.9 1.0"/>
+          </material>
+      </visual>
+	  <inertial>
+		<mass value="0.1"/>
+        <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+      </inertial>
+  </link>
+
+  <joint name="jointCameraRearPositiv" type="fixed">
+       <parent link="Hinterwagen"/>
+       <child link="CameraRearPositiv"/>
+	   <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="CameraRearNegativ">
+      <visual>
+    	  <origin xyz="${-len_wagen_hinten/2-0.04} +0.006 ${height_wagen*2/3+0.0410}" rpy="${-camera_angle-1.57} 0 1.57"/>
+        <axis xyz="0 0 0"/>
+          <geometry>
+              <!-- <box size="${len_wagen_vorne} ${width_wagen} ${height_wagen}"/> -->
+              <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_negativ.stl" scale="0.001 0.001 0.001" />
+          </geometry>
+          <material name="c">
+              <color rgba="0 0.9 0.9 1.0"/>
+          </material>
+      </visual>
+	  <inertial>
+		<mass value="0.1"/>
+        <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+      </inertial>
+  </link>
+
+  <joint name="jointCameraRearNegativ" type="fixed">
+       <parent link="CameraRearPositiv"/>
+       <child link="CameraRearNegativ"/>
+	   <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
   
   <!-- Laserscanner hinten -->
   <joint name="joint_rear_laser" type="fixed">
@@ -395,7 +492,7 @@
 	  <inertial>
 		<mass value="2.4"/>
         <inertia ixx="0.013" ixy="0.0" ixz="0.0" iyy="0.023" iyz="0.0" izz="0.013"/>
-      </inertial>
+    </inertial>
   </link>
 
 <!-- Gelenk zwischen Hinterwagen und Rad HL -->
@@ -440,17 +537,6 @@
     <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
       <robotNamespace>floribot</robotNamespace>
     </plugin>
-    <!-- <plugin name="floribot_simulation" filename="libfloribot_simulation.so">
-    <activate_pid_control>yes</activate_pid_control>                
-		<wheel_kp>1.0</wheel_kp>
-		<wheel_ki>0.5</wheel_ki>
-		<wheel_kd>0.01</wheel_kd>
-    </plugin> -->
   </gazebo>
-
-  <!--<xacro:sick_tim_5xx name="front_laser" ros_topic="laser_scanner_front"/>-->
-  <!-- <xacro:sick_tim_laser_gazebo_v0 name="laser" link="front_laser_mount_link" ros_topic="laser_scanner_front" update_rate="40" min_angle="-2.357" max_angle="2.357" min_range="0.05" max_range="4.0" samples="271"/> -->
-  <!-- <xacro:sick_tim_laser_gazebo_v0 name="laser" link="rear_laser_mount_link" ros_topic="laser_scanner_rear" update_rate="40" min_angle="-2.357" max_angle="2.357" min_range="0.05" max_range="4.0" samples="271"/> -->
- 
 
 </robot>
