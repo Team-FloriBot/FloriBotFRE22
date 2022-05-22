@@ -9,8 +9,6 @@
   <include file="$(find base)/launch/base_node.launch"></include>
   <!-- Include Wheel Speed Publisher from Ros to Gazebo -->
   <include file="$(find base2gazebo)/launch/base2gazebo.launch"></include>
-  <!-- Include Robot Spawner -->
-  <include file="$(find virtual_maize_field)/launch/robot_spawner.launch"></include>
   
   <param name="robot_description" command="$(find xacro)/xacro $(find floribot_simulation)/urdf/Floribot_final.urdf.xacro" />
 
@@ -29,4 +27,10 @@
           joint_rl_controller
           joint_rr_controller
             "/>
+
+      <!-- Include Robot Spawner ##### Muss hinter Controller Spawner stehen ########-->
+  <include file="$(find virtual_maize_field)/launch/robot_spawner.launch">
+    <arg name="robot_name" value="floribot"/>
+    <arg name="initial_joint_pose" value="-J body_angle -1.57" />
+  </include>
 </launch>
