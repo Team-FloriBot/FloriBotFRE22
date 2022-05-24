@@ -14,8 +14,9 @@ import collections
 
 class MoveRobotPathPattern:
     def __init__(self):
-        self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback, queue_size=3)   # [Laserscan] subscriber on /front/scan
-        self.pub_vel = rospy.Publisher("cmd_vel", Twist, queue_size=3)                                  # [Twist] publisher on /cmd_vel
+        self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
+        self.sub_laser = rospy.Subscriber("laser_scanner_rear", LaserScan, self.laser_callback_rear, queue_size=3)    # [Laserscan] subscriber on /laser_scanner_rear
+        self.pub_vel = rospy.Publisher("cmd_vel", Twist, queue_size=1)                                  # [Twist] publisher on /cmd_vel
         self.p_gain_offset_headland = rospy.get_param('~p_gain_offset_headland')                        # [1.0] gain of the p-controller applied to offset from an imaginary line for driving within the headland
         self.p_gain_orient_headland = rospy.get_param('~p_gain_orient_headland')                        # [1.0] gain of the p-controller applied to orientation from an imaginary line for driving within the headland
         self.max_lin_vel_in_row = rospy.get_param('~max_lin_vel_in_row')                                # [m/s] maximum linear velocity for driving within a row
@@ -26,8 +27,10 @@ class MoveRobotPathPattern:
         self.path_pattern = self.path_pattern.replace(" ", "")                                          # remove spaces: S 1L 2L 1L 0R F --> S1L2L1L0RF
         self.path_pattern = self.path_pattern[1:-1]                                                     # remove S (Start) and F (Finish): S1L2L1L1RF --> 1L2L1L0R
 
-        self.scan = LaserScan()                                                                         # [Laserscan] saving the current laser scan
-        self.x_front_laser_in_base_link = 0.305                                                         # [m] x-coordinate of front_laser frame in base_link frame
+        self.scan_front = LaserScan()                                                                   # [Laserscan] saving the current laser scan
+        self.scan_rear = LaserScan()
+        self.scan = LaserScan()
+        self.x_front_laser_in_base_link = 0.328                                                         # [m] x-coordinate of front_laser frame in base_link frame
 
         self.x_means = collections.deque(maxlen=1)                                                      # circular buffer for the means of x-coordinates used in state_turn_exit_row and state_turn_enter_row
         self.y_means = collections.deque(maxlen=1)                                                      # circular buffer for the means of y-coordinates used in state_turn_exit_row and state_turn_enter_row
@@ -35,7 +38,7 @@ class MoveRobotPathPattern:
         self.y_mean = 0.0                                                                               # [m] mean of means of y-coordinates
         self.x_mean_old = 0.0                                                                           # [m] previous mean of means of x-coordinates
         self.y_mean_old = 0.0                                                                           # [m] previous mean of means of y-coordinates
-        self.row_width = 0.45                                                                           # [m] row width
+        self.row_width = 0.75                                                                           # [m] row width
         self.turn_l = np.pi/2                                                                           # [rad] angle defining a left turn
         self.turn_r = -np.pi/2                                                                          # [rad] angle defining a right turn
         self.state = "state_wait_at_start"                                                              # [str] state that the state machine starts with
@@ -57,9 +60,11 @@ class MoveRobotPathPattern:
         # self.robot_running_crazy = False                                                                # [True, False] True if robot is driving through the field like a headless chicken
         # self.end_of_row_reached = False                                                                 # [True, False] True if robot has reached the end of the row
         self.time_start_reset_scan_dots = rospy.Time.now()
-        self.scan_left = np.zeros((10,2))
-        self.scan_right = np.zeros((10,2))
-        self.robot_width = 0.43
+        self.scan_left_front = np.zeros((10,2))
+        self.scan_right_front = np.zeros((10,2))
+        self.scan_left_rear = np.zeros((10,2))
+        self.scan_right_rear = np.zeros((10,2))
+        self.robot_width = 0.41
         self.robot_length = 1.30
 
     #########################################
@@ -196,8 +201,12 @@ class MoveRobotPathPattern:
         else:
             return val    
 
-    def laser_callback(self, scan):
-        self.scan = scan
+    def laser_callback_front(self, scan):
+        self.scan_front = scan
+        return None
+
+    def laser_callback_rear(self, scan):
+        self.scan_rear = scan
         return None
 
     ##########################################
@@ -231,17 +240,28 @@ class MoveRobotPathPattern:
         # self.scan_left = scan_cart[:, -idx_ranges_inner:-idx_ranges_outer]
         # self.scan_right = scan_cart[:, idx_ranges_outer:idx_ranges_inner]
 
-        self.scan_left = self.laser_box(self.scan, -1.0, 1.4, self.robot_width/2, self.row_width)
-        self.scan_right = self.laser_box(self.scan, -1.0, 1.4, -self.row_width, -self.robot_width/2)
 
-        mean_left = np.nanmean(self.scan_left[1, :])
-        mean_right = np.nanmean(self.scan_right[1, :])
+        # Swaped Right and Left, because Laser Z points down
+        self.scan_right_front = self.laser_box(self.scan_front, -0.2, 1.0, self.robot_width/2, self.row_width)
+        self.scan_left_front = self.laser_box(self.scan_front, -0.2, 1.0, -self.row_width, -self.robot_width/2)
 
-        print ("scan_right", self.scan_right[1, :])
-        print ("scan_left", self.scan_left[1, :])
+        self.scan_left_rear = self.laser_box(self.scan_rear, -0.2, 1.0, self.robot_width/2, self.row_width)
+        self.scan_right_rear = self.laser_box(self.scan_rear, -0.2, 1.0, -self.row_width, -self.robot_width/2)
 
-        print ("mean_left: ", mean_left)
-        print ("mean_right: ", mean_right)
+        mean_left_front = np.nanmean(self.scan_left_front[1, :])
+        mean_right_front = np.nanmean(self.scan_right_front[1, :])
+
+        mean_left_rear = np.nanmean(self.scan_left_rear[1, :])
+        mean_right_rear = np.nanmean(self.scan_right_rear[1, :])
+
+        #print ("scan_right", self.scan_right[1, :])
+        #print ("scan_left", self.scan_left[1, :])
+
+        print ("mean_left_front: ", mean_left_front)
+        print ("mean_right_front: ", mean_right_front)
+
+        #print ("mean_left_rear: ", mean_left_rear)
+        #print ("mean_right_rear: ", mean_right_rear)
         
         # # Solution for driving on row instead of in between rows
         # # This also lead to some errors when some plants of a row are missing
@@ -261,29 +281,52 @@ class MoveRobotPathPattern:
         # print("mean_left", mean_left, "mean_right", mean_right)
 
         # Solution for not having a row on one or both of the sides
-        if np.isnan(mean_left) and not np.isnan(mean_right):
-            offset = mean_right + self.row_width/2
-        elif np.isnan(mean_right) and not np.isnan(mean_left):
-            offset = mean_left - self.row_width/2
-        elif not np.isnan(mean_right) and not np.isnan(mean_left):
-            offset = mean_right + mean_left
+        # old, was replaced
+        #if np.isnan(mean_left_front) and not np.isnan(mean_right_front):
+        #    offset = mean_right_front + self.row_width/2
+        #elif np.isnan(mean_right_front) and not np.isnan(mean_left_front):
+        #    offset = mean_left_front - self.row_width/2
+        #elif not np.isnan(mean_right_front) and not np.isnan(mean_left_front):
+        #    offset = mean_right_front + mean_left_front
+        #else:
+        #    # If the determined mean are not a number (nan) a warning is raised and
+        #    # the controller offset of 0.0
+        #    offset = 0.0
+        #    self.offset_valid = 0.0     
+
+
+        if np.isnan(mean_left_front) and not np.isnan(mean_right_front):
+            offset = mean_right_front - self.row_width/2
+        elif np.isnan(mean_right_front) and not np.isnan(mean_left_front):
+            offset = mean_left_front + self.row_width/2
+        elif not np.isnan(mean_right_front) and not np.isnan(mean_left_front):
+            offset = mean_left_front + mean_right_front
         else:
             # If the determined mean are not a number (nan) a warning is raised and
             # the controller offset of 0.0
             offset = 0.0
-            self.offset_valid = 0.0          
+            self.offset_valid = 0.0      
 
         alpha = 0.2
         self.offset_valid = alpha * self.offset_valid + (1-alpha) * offset
+
+        print("Offset:", offset)
+        print("Offset_valid:", self.offset_valid)
         
         max_offset = self.row_width/2 # [m] maximum mid-row-offset possible
         normed_offset = self.offset_valid / max_offset
         normed_offset = self.clip(normed_offset, 1.0, -1.0)
+
+
+        print("Normed Offset:", normed_offset)
+
         cmd_vel = Twist()
         #cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - normed_offset**2)
         #cmd_vel.angular.z = self.max_ang_vel_robot * np.sign(normed_offset) * normed_offset**2
         cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - np.abs(normed_offset))
-        cmd_vel.angular.z = self.max_ang_vel_robot * normed_offset
+        cmd_vel.angular.z = -(self.max_ang_vel_robot * normed_offset)
+        print("Vel_lin", cmd_vel.linear.x)
+        print("Vel_angle", cmd_vel.angular.z)
         pub_vel.publish(cmd_vel)
 
         end_of_row = self.detect_row_end()
