@@ -21,7 +21,7 @@
 <xacro:property name="y_joint_wheel_back" value="0.167" />
 
 <!-- Laserparameter -->
-<xacro:property name="x_laser_front" value="0.305" />
+<xacro:property name="x_laser_front" value="0.328" />
 <xacro:property name="x_laser_back" value="-0.33" />
 <xacro:property name="laser_height" value="0.03" />
 
