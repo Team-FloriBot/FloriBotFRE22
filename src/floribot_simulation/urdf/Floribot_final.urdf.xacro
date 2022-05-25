@@ -390,7 +390,7 @@
        <child link="frontLeft"/>
        <axis xyz="0 1 0"/>
        <origin xyz="${x_joint_wheel_front} ${y_joint_wheel_front} 0"/>
-        <limit effort="1.0" velocity="14.2857" />
+        <limit effort="100.0" velocity="14.2857" />
   </joint>
 
 <!-- Transmission -->
@@ -427,7 +427,7 @@
        <child link="frontRight"/>
        <axis xyz="0 1 0"/>
        <origin xyz="${x_joint_wheel_front} -${y_joint_wheel_front} 0"/>
-       <limit effort="1.0" velocity="14.2857" />
+       <limit effort="100.0" velocity="14.2857" />
   </joint>
 
 <!-- Transmission -->
@@ -464,7 +464,7 @@
        <child link="rearRight"/>
        <axis xyz="0 1 0"/>
        <origin xyz="${x_joint_wheel_back} -${y_joint_wheel_back} 0"/>
-       <limit effort="1.0" velocity="14.2857" />
+       <limit effort="100.0" velocity="14.2857" />
   </joint>
 
 <!-- Transmission -->
@@ -501,7 +501,7 @@
        <child link="rearLeft"/>
        <axis xyz="0 1 0"/>
        <origin xyz="${x_joint_wheel_back} ${y_joint_wheel_back} 0"/>
-       <limit effort="1.0" velocity="14.2857" />
+       <limit effort="100.0" velocity="14.2857" />
   </joint>
 
 <!-- Transmission -->
