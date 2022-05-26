@@ -24,6 +24,7 @@ class MoveRobotPathPattern:
         self.max_ang_vel_robot= rospy.get_param('~max_ang_vel_robot')                                   # [rad/s] maximum angluar velocity of robot
         self.path_pattern = rospy.get_param('~path_pattern')                                            # [str] path pattern describing the robots trajectory through the field e.g. S-1L-2L-1L-0R-F
         self.time_for_quater_turn = rospy.get_param('~time_for_quater_turn')                            # [s] the time for a +-pi/2 turn used to exit or enter a row. It determines the angular velocity, but not the stop criterion
+        self.laser_scanner_coord_gazebo = rospy.get_param('~laser_scanner_coord_gazebo')                # [] parameter if the laserscanner coord is showing in the other direction of the robot coord systen
         self.path_pattern = self.path_pattern.replace(" ", "")                                          # remove spaces: S 1L 2L 1L 0R F --> S1L2L1L0RF
         self.path_pattern = self.path_pattern[1:-1]                                                     # remove S (Start) and F (Finish): S1L2L1L1RF --> 1L2L1L0R
 
@@ -80,7 +81,7 @@ class MoveRobotPathPattern:
         """
         angles = np.linspace(scan.angle_min, scan.angle_max, len(scan.ranges))
         x = scan.ranges*np.cos(angles)
-        y = scan.ranges*np.sin(angles)
+        y = scan.ranges*np.sin(angles) * self.laser_scanner_coord_gazebo
         scan_cart = np.array([x, y])
         ignore_ranges_max = np.array(scan.ranges) > max_range
         ignore_ranges_min = np.array(scan.ranges) < min_range
@@ -97,7 +98,7 @@ class MoveRobotPathPattern:
         """
         angles = np.linspace(scan.angle_min, scan.angle_max, len(scan.ranges))
         x = scan.ranges*np.cos(angles)
-        y = scan.ranges*np.sin(angles)
+        y = scan.ranges*np.sin(angles) * self.laser_scanner_coord_gazebo
         scan_cart = np.array([x, y])
         return scan_cart
 
@@ -241,9 +242,8 @@ class MoveRobotPathPattern:
         # self.scan_right = scan_cart[:, idx_ranges_outer:idx_ranges_inner]
 
 
-        # Swaped Right and Left, because Laser Z points down
-        self.scan_right_front = self.laser_box(self.scan_front, -0.2, 1.0, self.robot_width/2, self.row_width)
-        self.scan_left_front = self.laser_box(self.scan_front, -0.2, 1.0, -self.row_width, -self.robot_width/2)
+        self.scan_left_front = self.laser_box(self.scan_front, -0.2, 1.0, self.robot_width/2, self.row_width)
+        self.scan_right_front = self.laser_box(self.scan_front, -0.2, 1.0, -self.row_width, -self.robot_width/2)
 
         self.scan_left_rear = self.laser_box(self.scan_rear, -0.2, 1.0, self.robot_width/2, self.row_width)
         self.scan_right_rear = self.laser_box(self.scan_rear, -0.2, 1.0, -self.row_width, -self.robot_width/2)
@@ -251,8 +251,8 @@ class MoveRobotPathPattern:
         mean_left_front = np.nanmean(self.scan_left_front[1, :])
         mean_right_front = np.nanmean(self.scan_right_front[1, :])
 
-        mean_left_rear = np.nanmean(self.scan_left_rear[1, :])
-        mean_right_rear = np.nanmean(self.scan_right_rear[1, :])
+        # mean_left_rear = np.nanmean(self.scan_left_rear[1, :])
+        # mean_right_rear = np.nanmean(self.scan_right_rear[1, :])
 
         #print ("scan_right", self.scan_right[1, :])
         #print ("scan_left", self.scan_left[1, :])
@@ -296,9 +296,9 @@ class MoveRobotPathPattern:
 
 
         if np.isnan(mean_left_front) and not np.isnan(mean_right_front):
-            offset = mean_right_front - self.row_width/2
+            offset = mean_right_front + self.row_width/2
         elif np.isnan(mean_right_front) and not np.isnan(mean_left_front):
-            offset = mean_left_front + self.row_width/2
+            offset = mean_left_front - self.row_width/2
         elif not np.isnan(mean_right_front) and not np.isnan(mean_left_front):
             offset = mean_left_front + mean_right_front
         else:
@@ -324,7 +324,7 @@ class MoveRobotPathPattern:
         #cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - normed_offset**2)
         #cmd_vel.angular.z = self.max_ang_vel_robot * np.sign(normed_offset) * normed_offset**2
         cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - np.abs(normed_offset))
-        cmd_vel.angular.z = -(self.max_ang_vel_robot * normed_offset)
+        cmd_vel.angular.z = self.max_ang_vel_robot * normed_offset
         print("Vel_lin", cmd_vel.linear.x)
         print("Vel_angle", cmd_vel.angular.z)
         pub_vel.publish(cmd_vel)
