@@ -117,13 +117,13 @@ class MoveRobotPathPattern:
         return:             [False, True] end of row reached (True) or not (False)
         """
 
-        x_min = -1.5
+        x_min = -0.3
         x_max = 1.0
-        y_min = -3.5*self.row_width
-        y_max = 3.5*self.row_width
-        self.laser_box_drive_row = self.laser_box(self.scan, x_min, x_max, y_min, y_max)
+        y_min = -self.row_width
+        y_max = self.row_width
+        self.laser_box_drive_row = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
         self.x_mean = np.mean(self.laser_box_drive_row[0,:])
-        end_of_row = self.x_mean < -0.1 
+        end_of_row = self.x_mean < -0.1 or np.isnan(self.x_mean)
         return end_of_row
 
     def detect_robot_running_crazy(self, scan, collisions_thresh, collision_reset_time):
@@ -262,37 +262,6 @@ class MoveRobotPathPattern:
 
         #print ("mean_left_rear: ", mean_left_rear)
         #print ("mean_right_rear: ", mean_right_rear)
-        
-        # # Solution for driving on row instead of in between rows
-        # # This also lead to some errors when some plants of a row are missing
-        # # and the robot can see the other row as well
-        # if mean_left - mean_right > 1.2*self.row_width:            
-        #     if abs(mean_left) < abs(mean_right):
-        #         mean_right = -self.row_width +  mean_left
-        #     elif abs(mean_right) < abs(mean_left):
-        #         mean_left = self.row_width + mean_right
-
-        # # Solution for having one mean determined wrongly
-        # # This did not work because the robot did not drive a curve
-        # if abs(mean_left) > 1.2*self.row_width/2:
-        #     mean_left = self.row_width + mean_right
-        # if abs(mean_right) > 1.2*self.row_width/2:
-        #     mean_right = -self.row_width + mean_left
-        # print("mean_left", mean_left, "mean_right", mean_right)
-
-        # Solution for not having a row on one or both of the sides
-        # old, was replaced
-        #if np.isnan(mean_left_front) and not np.isnan(mean_right_front):
-        #    offset = mean_right_front + self.row_width/2
-        #elif np.isnan(mean_right_front) and not np.isnan(mean_left_front):
-        #    offset = mean_left_front - self.row_width/2
-        #elif not np.isnan(mean_right_front) and not np.isnan(mean_left_front):
-        #    offset = mean_right_front + mean_left_front
-        #else:
-        #    # If the determined mean are not a number (nan) a warning is raised and
-        #    # the controller offset of 0.0
-        #    offset = 0.0
-        #    self.offset_valid = 0.0     
 
 
         if np.isnan(mean_left_front) and not np.isnan(mean_right_front):
@@ -330,7 +299,8 @@ class MoveRobotPathPattern:
         pub_vel.publish(cmd_vel)
 
         end_of_row = self.detect_row_end()
-        robot_running_crazy = self.detect_robot_running_crazy(self.scan, collisions_thresh=100, collision_reset_time=2.0)
+        print("End of row", end_of_row)
+        robot_running_crazy = self.detect_robot_running_crazy(self.scan_front, collisions_thresh=100, collision_reset_time=2.0)
 
         if robot_running_crazy:
             return "state_error"
@@ -352,7 +322,7 @@ class MoveRobotPathPattern:
         # The scan points falling in this box are evaluated:
         # use the mean of x-coordinates to turn out of the row correctly
 
-        self.xy_scan_raw = self.scan2cart_w_ign(self.scan, max_range=30.0)
+        self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
 
         # extract next turn from path pattern
         # and check direction ('L' or 'R' ?)
@@ -371,7 +341,7 @@ class MoveRobotPathPattern:
         # the robot has always to see an uneven number of rows
         x_min = -1.5*self.row_width
         x_max = 1.5*self.row_width
-        self.laser_box_drive_headland = self.laser_box(self.scan, x_min, x_max, y_min, y_max)
+        self.laser_box_drive_headland = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
         self.x_means.append(np.mean(self.laser_box_drive_headland[0,:]))
         self.x_mean = np.mean(self.x_means) 
 
@@ -412,20 +382,20 @@ class MoveRobotPathPattern:
         # The scan points falling in this box are evaluated:
         # use the mean of x coordinates to control the robot to pass by
 
-        self.xy_scan_raw = self.scan2cart_w_ign(self.scan, max_range=30.0)
+        self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
         # the robot has always to see an uneven number of rows
-        x_min_drive_headland = -1.5*self.row_width
+        x_min_drive_headland = -0.2
         x_max_drive_headland = 1.5*self.row_width
         which_turn = self.path_pattern[1]
         if which_turn == 'L':
             y_min_drive_headland = 0.0
-            y_max_drive_headland = 2.0
+            y_max_drive_headland = 3.0
             turn_sign = 1.0
         elif which_turn == 'R':
-            y_min_drive_headland = -2.0
+            y_min_drive_headland = -3.0
             y_max_drive_headland = 0.0
             turn_sign = -1.0
-        self.laser_box_drive_headland = self.laser_box(self.scan, x_min_drive_headland, x_max_drive_headland, y_min_drive_headland, y_max_drive_headland)
+        self.laser_box_drive_headland = self.laser_box(self.scan_front, x_min_drive_headland, x_max_drive_headland, y_min_drive_headland, y_max_drive_headland)
         self.x_means.append(np.mean(self.laser_box_drive_headland[0,:]))
         self.y_means.append(np.mean(self.laser_box_drive_headland[1,:]))
         self.x_mean = np.mean(self.x_means)
@@ -547,13 +517,13 @@ class MoveRobotPathPattern:
         # The scan points falling in this box are evaluated:
         # use the mean of y-coordinates to turn out of the row correctly
 
-        self.xy_scan_raw = self.scan2cart_w_ign(self.scan, max_range=30.0)
+        self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
         # the robot has always to see an uneven number of rows
         x_min = 0.0
         x_max = 2.5
         y_min = -1.5*self.row_width
         y_max = 1.5*self.row_width
-        self.laser_box_drive_headland = self.laser_box(self.scan, x_min, x_max, y_min, y_max)
+        self.laser_box_drive_headland = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
         self.y_means.append(np.mean(self.laser_box_drive_headland[1,:]))
         self.y_mean = np.mean(self.y_means) 
 
