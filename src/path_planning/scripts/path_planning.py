@@ -80,7 +80,7 @@ class MoveRobotPathPattern:
         return:             x- and y-coordinates of laser scan
         """
         angles = np.linspace(scan.angle_min, scan.angle_max, len(scan.ranges))
-        x = scan.ranges*np.cos(angles)
+        x = scan.ranges*np.cos(angles) + self.x_front_laser_in_base_link
         y = scan.ranges*np.sin(angles) * self.laser_scanner_coord_gazebo
         scan_cart = np.array([x, y])
         ignore_ranges_max = np.array(scan.ranges) > max_range
@@ -97,7 +97,7 @@ class MoveRobotPathPattern:
         return:             x- and y-coordinates of laser scan
         """
         angles = np.linspace(scan.angle_min, scan.angle_max, len(scan.ranges))
-        x = scan.ranges*np.cos(angles)
+        x = scan.ranges*np.cos(angles) + self.x_front_laser_in_base_link
         y = scan.ranges*np.sin(angles) * self.laser_scanner_coord_gazebo
         scan_cart = np.array([x, y])
         return scan_cart
