@@ -42,6 +42,7 @@ class MoveRobotPathPattern:
         self.row_width = 0.75                                                                           # [m] row width
         self.turn_l = np.pi/2                                                                           # [rad] angle defining a left turn
         self.turn_r = -np.pi/2                                                                          # [rad] angle defining a right turn
+        self.offset_radius = 0.2                                                                        # [m] radius offset for end of row turn
         self.state = "state_wait_at_start"                                                              # [str] state that the state machine starts with
         self.angle_valid = 0.0                                                                          # [rad] valid mid-row angle applicable for robot control
         self.offset_valid = 0.0                                                                         # [m] valid mid-row offset applicable for robot control
@@ -245,8 +246,8 @@ class MoveRobotPathPattern:
         self.scan_left_front = self.laser_box(self.scan_front, -0.2, 1.0, self.robot_width/2, self.row_width)
         self.scan_right_front = self.laser_box(self.scan_front, -0.2, 1.0, -self.row_width, -self.robot_width/2)
 
-        self.scan_left_rear = self.laser_box(self.scan_rear, -0.2, 1.0, self.robot_width/2, self.row_width)
-        self.scan_right_rear = self.laser_box(self.scan_rear, -0.2, 1.0, -self.row_width, -self.robot_width/2)
+        #self.scan_left_rear = self.laser_box(self.scan_rear, -0.2, 1.0, self.robot_width/2, self.row_width)
+        #self.scan_right_rear = self.laser_box(self.scan_rear, -0.2, 1.0, -self.row_width, -self.robot_width/2)
 
         mean_left_front = np.nanmean(self.scan_left_front[1, :])
         mean_right_front = np.nanmean(self.scan_right_front[1, :])
@@ -278,15 +279,13 @@ class MoveRobotPathPattern:
 
         alpha = 0.2
         self.offset_valid = alpha * self.offset_valid + (1-alpha) * offset
-
-        print("Offset:", offset)
-        print("Offset_valid:", self.offset_valid)
         
         max_offset = self.row_width/2 # [m] maximum mid-row-offset possible
         normed_offset = self.offset_valid / max_offset
         normed_offset = self.clip(normed_offset, 1.0, -1.0)
 
-
+        print("Offset:", offset)
+        print("Offset_valid:", self.offset_valid)
         print("Normed Offset:", normed_offset)
 
         cmd_vel = Twist()
@@ -294,8 +293,8 @@ class MoveRobotPathPattern:
         #cmd_vel.angular.z = self.max_ang_vel_robot * np.sign(normed_offset) * normed_offset**2
         cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - np.abs(normed_offset))
         cmd_vel.angular.z = self.max_ang_vel_robot * normed_offset
-        print("Vel_lin", cmd_vel.linear.x)
-        print("Vel_angle", cmd_vel.angular.z)
+        #print("Vel_lin", cmd_vel.linear.x)
+        #print("Vel_angle", cmd_vel.angular.z)
         pub_vel.publish(cmd_vel)
 
         end_of_row = self.detect_row_end()
@@ -329,12 +328,12 @@ class MoveRobotPathPattern:
         which_turn = self.path_pattern[1]
         if which_turn == 'L':
             turn = self.turn_l
-            radius = self.row_width/2 + self.offset_valid
+            radius = self.row_width/2 + self.offset_valid + self.offset_radius
             y_min = 0.0
             y_max = 2.5
         elif which_turn == 'R':
             turn = self.turn_r
-            radius = self.row_width/2 - self.offset_valid
+            radius = self.row_width/2 - self.offset_valid - self.offset_radius
             y_min = -2.5
             y_max = 0.0
 
@@ -536,7 +535,7 @@ class MoveRobotPathPattern:
             turn = self.turn_r
 
         ang_z = turn                            # [rad]
-        dist_x = self.row_width/2 * abs(ang_z)  # [m]
+        dist_x = (self.row_width/2 + self.offset_radius) * abs(ang_z)  # [m]
         t = self.time_for_quater_turn           # [s]
 
         # Check if the same row is to be entered again (-> 0)
