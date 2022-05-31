@@ -111,8 +111,8 @@
 	  </collision>
 	  <inertial>
     <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
-		<mass value="33"/>
-        <inertia ixx="1.286541" ixy="0.0" ixz="0.0" iyy="0.457810" iyz="0.0" izz="1.063241"/>
+		<mass value="31"/>
+        <inertia ixx="0.3853" ixy="0.0001197" ixz="-0.0128" iyy="1.0" iyz="0.0000149" izz="0.8678"/>
       </inertial>
   </link>
 
@@ -317,7 +317,7 @@
 	  <inertial>
     <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
 		<mass value="33"/>
-        <inertia ixx="1.369982" ixy="0.0" ixz="0.0" iyy="0.487502" iyz="0.0" izz="1.132200"/>
+        <inertia ixx="0.4137" ixy="0.00027" ixz="0.007359" iyy="1.047" iyz="0.0001775" izz="0.9021"/>
       </inertial>
   </link>
 
@@ -417,7 +417,7 @@
 	  </collision>
 	  <inertial>
 		<mass value="2.4"/>
-        <inertia ixx="0.013" ixy="0.0" ixz="0.0" iyy="0.023" iyz="0.0" izz="0.013"/>
+        <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
       </inertial>
   </link>
 
@@ -454,7 +454,7 @@
 	  </collision>
 	  <inertial>
 		<mass value="2.4"/>
-        <inertia ixx="0.013" ixy="0.0" ixz="0.0" iyy="0.023" iyz="0.0" izz="0.013"/>
+        <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
       </inertial>
   </link>
 
@@ -491,7 +491,7 @@
 	  </collision>
 	  <inertial>
 		<mass value="2.4"/>
-        <inertia ixx="0.013" ixy="0.0" ixz="0.0" iyy="0.023" iyz="0.0" izz="0.013"/>
+        <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
     </inertial>
   </link>
 
@@ -528,7 +528,7 @@
 	  </collision>
 	  <inertial>
 		<mass value="2.4"/>
-        <inertia ixx="0.013" ixy="0.0" ixz="0.0" iyy="0.023" iyz="0.0" izz="0.013"/>
+        <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
       </inertial>
   </link>
 
