@@ -355,9 +355,9 @@ class MoveRobotPathPattern:
         # and therefore have no linear velocity but only
         # angular velocity. Thus, we set the distance in x direction
         # to zero.
-        which_row = int(self.path_pattern[0])
-        if which_row == 0:
-            dist_x = 0.0
+        #which_row = int(self.path_pattern[0])
+        #if which_row == 0:
+        #    dist_x = 0.0
 
         x_close_to_zero = abs(self.x_mean) < 0.1
         x_zero_crossing = self.x_mean*self.x_mean_old < 0.0
