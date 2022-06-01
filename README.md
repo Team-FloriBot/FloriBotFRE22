@@ -5,7 +5,17 @@ Um das Repository zu klonen folgenden Befehl benutzen:
 
     git clone https://github.com/Team-FloriBot/FloriBotFRE22.git catkin_ws
 
-Existiert der Ordner bereits, muss er zuerst gelöscht werden. Optional könnte man auch das <catkin_ws> durch einen anderen Zielordnernamen ersetzen.
+Existiert der Ordner bereits, muss er zuerst gelöscht werden. Optional könnte man auch das <catkin_ws> durch einen anderen Zielordnernamen ersetzen.<br>
+<br>
+Um die Daten im Submodul virtual_maize_field herunterzuladen muss zuerst
+
+    git submodule init
+    
+ausgeführt werden und anschließend
+
+    git submodule update
+    
+Es werden dann alle Daten des Submoduls heruntergeladen. 
 
 # Benötigte Software
 ROS Noetic: http://wiki.ros.org/noetic/Installation/Ubuntu <br>
