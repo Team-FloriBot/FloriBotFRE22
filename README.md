@@ -51,6 +51,12 @@ Ein neues Terminal öffnen und folgenden Befehl eingeben:
     cd ~/catkin_ws && catkin_make && source ~/.bashrc 
 
 Nachdem der Befehl eingegeben wurde, wirde der Catkin Workspace über catkin_make erstellt und es erscheinen im Ordner catkin_ws zwei neue Unterordner: "build" und "devel". <br>
+Bevor nun die Simulation gestartet werden kann, muss noch zuerst eine Welt generiert werden. Das geht zum Beispiel mit:
+
+    rosrun virtual_maize_field generate_world.py fre22_task_navigation_mini
+
+Mehr Vorschläge für die Generierung von Welten findet ihr unter: https://github.com/FieldRobotEvent/virtual_maize_field#sample-worlds
+<br>
 Anschließend kann die Simulation mit dem folgendem Befehel gestartet werdeb:
 
     roslaunch floribot_simulation FloriBot.launch 
@@ -58,7 +64,9 @@ Anschließend kann die Simulation mit dem folgendem Befehel gestartet werdeb:
 Sollte eine Fehlermeldung kommen, folgenden Befehl eingeben und anschließend erneut den roslaunch.. Befehl ausführen. (Zu Beachten: Euren Nutzernamen ohne die eckigen Klammern einsetzen)
 
     source  /home/<nutzername>/catkin_ws/devel/setup.bash 
-    
+
+Damit du nicht immer diesen Befehl eingeben müsst, wäre es ratsam, den Befehl an das Ende eurer .bashrc Datei zu schreiben. Diese findest du in deinem persönlichen Ordner. 
+<br><br>
 Sobald die Simulation läuft, kann mit dem Roboter mit folgendem Befehl eine Geschwindigkeit vorgegeben werden, dazu muss jedoch ein neues Terminal geöffnet werden: 
 
     rostopic pub /cmd_vel geometry_msgs/Twist -r 10 -- '[0.2, 0.0, 0.0]' '[0.0, 0.0, 0.0]' 
