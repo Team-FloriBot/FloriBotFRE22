@@ -47,7 +47,6 @@ class MoveRobotPathPattern:
         self.angle_valid = 0.0                                                                          # [rad] valid mid-row angle applicable for robot control
         self.offset_valid = 0.0                                                                         # [m] valid mid-row offset applicable for robot control
         self.time_start = rospy.Time.now()                                                              # [rospy.Time] timestamp used in state_headlands
-        self.actual_lin_vel = 0                                                                         # [m/s] actual linear x velocity 
         self.laser_box_drive_headland = np.zeros((10,2))
         self.laser_box_detect_row = np.zeros((10,2))
         self.laser_box_drive_row = np.zeros((10,2)) 
@@ -293,7 +292,6 @@ class MoveRobotPathPattern:
         #cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - normed_offset**2)
         #cmd_vel.angular.z = self.max_ang_vel_robot * np.sign(normed_offset) * normed_offset**2
         self.actual_lin_vel = self.max_lin_vel_in_row * (1 - np.abs(normed_offset))
-        cmd_vel.linear.x = self.actual_lin_vel
         cmd_vel.angular.z = self.max_ang_vel_robot * normed_offset
         #print("Vel_lin", cmd_vel.linear.x)
         #print("Vel_angle", cmd_vel.angular.z)
