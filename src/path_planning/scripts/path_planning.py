@@ -23,7 +23,7 @@ class MoveRobotPathPattern:
         self.max_lin_vel_in_headland= rospy.get_param('~max_lin_vel_in_headland')                       # [m/s] maximum linear velocity for driving within the headland
         self.max_ang_vel_robot= rospy.get_param('~max_ang_vel_robot')                                   # [rad/s] maximum angluar velocity of robot
         self.path_pattern = rospy.get_param('~path_pattern')                                            # [str] path pattern describing the robots trajectory through the field e.g. S-1L-2L-1L-0R-F
-        self.time_for_quater_turn = rospy.get_param('~time_for_quater_turn')                            # [s] the time for a +-pi/2 turn used to exit or enter a row. It determines the angular velocity, but not the stop criterion
+        self.lin_vel_turn = rospy.get_param('~lin_vel_turn')                                            # [m/s] linear x velocity while turns
         self.laser_scanner_coord_gazebo = rospy.get_param('~laser_scanner_coord_gazebo')                # [] parameter if the laserscanner coord is showing in the other direction of the robot coord systen
         self.path_pattern = self.path_pattern.replace(" ", "")                                          # remove spaces: S 1L 2L 1L 0R F --> S1L2L1L0RF
         self.path_pattern = self.path_pattern[1:-1]                                                     # remove S (Start) and F (Finish): S1L2L1L1RF --> 1L2L1L0R
@@ -42,11 +42,12 @@ class MoveRobotPathPattern:
         self.row_width = 0.75                                                                           # [m] row width
         self.turn_l = np.pi/2                                                                           # [rad] angle defining a left turn
         self.turn_r = -np.pi/2                                                                          # [rad] angle defining a right turn
-        self.offset_radius = 0.2                                                                        # [m] radius offset for end of row turn
+        self.offset_radius = 0.1                                                                        # [m] radius offset for end of row turn
         self.state = "state_wait_at_start"                                                              # [str] state that the state machine starts with
         self.angle_valid = 0.0                                                                          # [rad] valid mid-row angle applicable for robot control
         self.offset_valid = 0.0                                                                         # [m] valid mid-row offset applicable for robot control
         self.time_start = rospy.Time.now()                                                              # [rospy.Time] timestamp used in state_headlands
+        self.actual_lin_vel = 0                                                                         # [m/s] actual linear x velocity 
         self.laser_box_drive_headland = np.zeros((10,2))
         self.laser_box_detect_row = np.zeros((10,2))
         self.laser_box_drive_row = np.zeros((10,2)) 
@@ -179,7 +180,7 @@ class MoveRobotPathPattern:
         allow = np.logical_and(allow_x, allow_y)
         return xy_all[:, allow]
 
-    def move_robot(self, pub, distance, angle, period):
+    def move_robot(self, pub, lin_vel, ang_vel):
         """
         Module that translates the robot according to a distance and rotates it
         according to an angle in a given period of time.
@@ -190,8 +191,8 @@ class MoveRobotPathPattern:
         return:             nothing
         """
         cmd_vel = Twist()
-        cmd_vel.linear.x = distance / period
-        cmd_vel.angular.z = angle / period
+        cmd_vel.linear.x = lin_vel
+        cmd_vel.angular.z = ang_vel
         pub.publish(cmd_vel)
         return None
 
@@ -221,7 +222,7 @@ class MoveRobotPathPattern:
         cmd_vel.linear.x = 0.0
         cmd_vel.angular.z = 0.0
         pub_vel.publish(cmd_vel)
-        t = 5.0 # [s] period of time that the robot waits before entering the first row
+        t = 2.0 # [s] period of time that the robot waits before entering the first row
         if rospy.Time.now() - self.time_start > rospy.Duration.from_sec(t):                
             return "state_in_row"
         else:
@@ -291,7 +292,8 @@ class MoveRobotPathPattern:
         cmd_vel = Twist()
         #cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - normed_offset**2)
         #cmd_vel.angular.z = self.max_ang_vel_robot * np.sign(normed_offset) * normed_offset**2
-        cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - np.abs(normed_offset))
+        self.actual_lin_vel = self.max_lin_vel_in_row * (1 - np.abs(normed_offset))
+        cmd_vel.linear.x = self.actual_lin_vel
         cmd_vel.angular.z = self.max_ang_vel_robot * normed_offset
         #print("Vel_lin", cmd_vel.linear.x)
         #print("Vel_angle", cmd_vel.angular.z)
@@ -333,7 +335,7 @@ class MoveRobotPathPattern:
             y_max = 2.5
         elif which_turn == 'R':
             turn = self.turn_r
-            radius = self.row_width/2 - self.offset_valid - self.offset_radius
+            radius = -self.row_width/2 - self.offset_valid - self.offset_radius
             y_min = -2.5
             y_max = 0.0
 
@@ -346,9 +348,9 @@ class MoveRobotPathPattern:
 
         # TODO:
         # angular velocity determined by linear velocity in rosparam or last cmd_vel.lin.x
-        ang_z = turn                            # [rad]
-        dist_x = radius * abs(ang_z)            # [m]
-        t = self.time_for_quater_turn           # [s]
+        
+        #t = self.time_for_quater_turn           # [s]
+        ang_vel = self.lin_vel_turn/radius    # [rad/s]
 
         # Check if the same row is to be entered again (-> 0)
         # If this is the case, we want the robot to turn in place
@@ -361,13 +363,15 @@ class MoveRobotPathPattern:
 
         x_close_to_zero = abs(self.x_mean) < 0.1
         x_zero_crossing = self.x_mean*self.x_mean_old < 0.0
+
         if x_close_to_zero or x_zero_crossing:
             self.time_start = rospy.Time.now()
             # reset variable
             self.x_mean_old = 0.0
             return "state_headlands"
+            #return "state_turn_exit_row"
         else:
-            self.move_robot(pub_vel, dist_x, ang_z, t)
+            self.move_robot(pub_vel, self.lin_vel_turn, ang_vel)
             self.x_mean_old = self.x_mean
             return "state_turn_exit_row"
 
@@ -531,12 +535,15 @@ class MoveRobotPathPattern:
         which_turn = self.path_pattern[1]
         if which_turn == 'L':
             turn = self.turn_l
+            radius = self.row_width/2 + self.offset_valid + self.offset_radius
         elif which_turn == 'R':
             turn = self.turn_r
+            radius = -self.row_width/2 - self.offset_valid - self.offset_radius
 
-        ang_z = turn                            # [rad]
+        """ang_z = turn                            # [rad]
         dist_x = (self.row_width/2 + self.offset_radius) * abs(ang_z)  # [m]
-        t = self.time_for_quater_turn           # [s]
+        t = self.time_for_quater_turn           # [s]"""
+        ang_vel = self.lin_vel_turn/radius   # [rad/s]
 
         # Check if the same row is to be entered again (-> 0)
         # If this is the case, we want the robot to turn in place
@@ -554,7 +561,7 @@ class MoveRobotPathPattern:
             self.y_mean_old = 0.0
             return "state_crop_path_pattern"
         else:
-            self.move_robot(pub_vel, dist_x, ang_z, t)
+            self.move_robot(pub_vel, self.lin_vel_turn,ang_vel)
             self.y_mean_old = self.y_mean
             return "state_turn_enter_row"
 
