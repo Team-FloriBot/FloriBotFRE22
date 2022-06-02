@@ -291,7 +291,7 @@ class MoveRobotPathPattern:
         cmd_vel = Twist()
         #cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - normed_offset**2)
         #cmd_vel.angular.z = self.max_ang_vel_robot * np.sign(normed_offset) * normed_offset**2
-        self.actual_lin_vel = self.max_lin_vel_in_row * (1 - np.abs(normed_offset))
+        cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - np.abs(normed_offset))
         cmd_vel.angular.z = self.max_ang_vel_robot * normed_offset
         #print("Vel_lin", cmd_vel.linear.x)
         #print("Vel_angle", cmd_vel.angular.z)
