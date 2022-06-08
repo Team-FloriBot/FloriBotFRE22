@@ -124,7 +124,7 @@ class MoveRobotPathPattern:
         y_max = self.row_width
         self.laser_box_drive_row = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
         self.x_mean = np.mean(self.laser_box_drive_row[0,:])
-        end_of_row = self.x_mean < -0.1 or np.isnan(self.x_mean)
+        end_of_row = self.x_mean < -0.5 or np.isnan(self.x_mean)
         return end_of_row
 
     def detect_robot_running_crazy(self, scan, collisions_thresh, collision_reset_time):
@@ -243,6 +243,13 @@ class MoveRobotPathPattern:
         # self.scan_right = scan_cart[:, idx_ranges_outer:idx_ranges_inner]
 
 
+        """self.scan_left_front = self.laser_box(self.scan_front, -0.2, 0.4, self.robot_width/2, self.row_width)
+        self.scan_right_front = self.laser_box(self.scan_front, -0.2, 0.4, -self.row_width, -self.robot_width/2)
+
+        if np.isnan(self.scan_left_front.all()) or np.isnan(self.scan_right_front.all()): 
+            self.scan_left_front = self.laser_box(self.scan_front, -0.2, 1.0, self.robot_width/2, self.row_width)
+            self.scan_right_front = self.laser_box(self.scan_front, -0.2, 1.0, -self.row_width, -self.robot_width/2)"""
+
         self.scan_left_front = self.laser_box(self.scan_front, -0.2, 1.0, self.robot_width/2, self.row_width)
         self.scan_right_front = self.laser_box(self.scan_front, -0.2, 1.0, -self.row_width, -self.robot_width/2)
 
@@ -330,19 +337,21 @@ class MoveRobotPathPattern:
             turn = self.turn_l
             radius = self.row_width/2 + self.offset_valid + self.offset_radius
             y_min = 0.0
-            y_max = 2.5
+            y_max = 6.5
         elif which_turn == 'R':
             turn = self.turn_r
             radius = -self.row_width/2 - self.offset_valid - self.offset_radius
-            y_min = -2.5
+            y_min = -6.5
             y_max = 0.0
 
         # the robot has always to see an uneven number of rows
-        x_min = -1.5*self.row_width
-        x_max = 1.5*self.row_width
+        x_min = -self.row_width
+        x_max = 2*self.row_width + 0.25
         self.laser_box_drive_headland = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
         self.x_means.append(np.mean(self.laser_box_drive_headland[0,:]))
         self.x_mean = np.mean(self.x_means) 
+
+        print("x_mean", self.x_mean)
 
         # TODO:
         # angular velocity determined by linear velocity in rosparam or last cmd_vel.lin.x
@@ -359,15 +368,19 @@ class MoveRobotPathPattern:
         #if which_row == 0:
         #    dist_x = 0.0
 
-        x_close_to_zero = abs(self.x_mean) < 0.1
-        x_zero_crossing = self.x_mean*self.x_mean_old < 0.0
+        x_close_to_point_six = self.x_mean > 0.65
+        x_zero_crossing = np.abs(self.x_mean - self.x_mean_old) < 0.2
 
-        if x_close_to_zero or x_zero_crossing:
+        if x_close_to_point_six and x_zero_crossing:
             self.time_start = rospy.Time.now()
             # reset variable
             self.x_mean_old = 0.0
+            
+            #self.move_robot(pub_vel, self.lin_vel_turn, ang_vel)
+            #self.x_mean_old = self.x_mean
             return "state_headlands"
             #return "state_turn_exit_row"
+            #return "state_finished"
         else:
             self.move_robot(pub_vel, self.lin_vel_turn, ang_vel)
             self.x_mean_old = self.x_mean
@@ -383,7 +396,7 @@ class MoveRobotPathPattern:
         # The scan points falling in this box are evaluated:
         # use the mean of x coordinates to control the robot to pass by
 
-        self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
+        # self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
         # the robot has always to see an uneven number of rows
         x_min_drive_headland = -0.2
         x_max_drive_headland = 1.5*self.row_width
@@ -518,12 +531,12 @@ class MoveRobotPathPattern:
         # The scan points falling in this box are evaluated:
         # use the mean of y-coordinates to turn out of the row correctly
 
-        self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
+        # self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
         # the robot has always to see an uneven number of rows
         x_min = 0.0
         x_max = 2.5
-        y_min = -1.5*self.row_width
-        y_max = 1.5*self.row_width
+        y_min = -1.2*self.row_width
+        y_max = 1.2*self.row_width
         self.laser_box_drive_headland = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
         self.y_means.append(np.mean(self.laser_box_drive_headland[1,:]))
         self.y_mean = np.mean(self.y_means) 
@@ -552,11 +565,17 @@ class MoveRobotPathPattern:
         if which_row == 0:
             dist_x = 0.0
 
+        print("y_mean", self.y_mean)
         y_close_to_zero = abs(self.y_mean) < 0.1
-        y_zero_crossing = self.y_mean*self.y_mean_old < 0.0
-        if y_close_to_zero or y_zero_crossing:
+        y_diff_thresh = np.abs(self.y_mean*self.y_mean_old) < 0.1
+        if y_close_to_zero and y_diff_thresh:
             # reset variable
             self.y_mean_old = 0.0
+
+            """self.move_robot(pub_vel, self.lin_vel_turn,ang_vel)
+            self.y_mean_old = self.y_mean
+            return "state_turn_enter_row"""
+
             return "state_crop_path_pattern"
         else:
             self.move_robot(pub_vel, self.lin_vel_turn,ang_vel)
