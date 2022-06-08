@@ -337,11 +337,11 @@ class MoveRobotPathPattern:
             turn = self.turn_l
             radius = self.row_width/2 + self.offset_valid + self.offset_radius
             y_min = 0.0
-            y_max = 6.5
+            y_max = 2
         elif which_turn == 'R':
             turn = self.turn_r
             radius = -self.row_width/2 - self.offset_valid - self.offset_radius
-            y_min = -6.5
+            y_min = -2
             y_max = 0.0
 
         # the robot has always to see an uneven number of rows
