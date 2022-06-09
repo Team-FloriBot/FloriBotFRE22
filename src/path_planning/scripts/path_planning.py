@@ -14,8 +14,12 @@ import collections
 
 class MoveRobotPathPattern:
     def __init__(self):
-        self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
-        self.sub_laser = rospy.Subscriber("laser_scanner_rear", LaserScan, self.laser_callback_rear, queue_size=3)    # [Laserscan] subscriber on /laser_scanner_rear
+        #self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
+        #self.sub_laser = rospy.Subscriber("laser_scanner_rear", LaserScan, self.laser_callback_rear, queue_size=3)    # [Laserscan] subscriber on /laser_scanner_rear
+        
+        self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
+        self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)
+        
         self.pub_vel = rospy.Publisher("cmd_vel", Twist, queue_size=1)                                  # [Twist] publisher on /cmd_vel
         self.p_gain_offset_headland = rospy.get_param('~p_gain_offset_headland')                        # [1.0] gain of the p-controller applied to offset from an imaginary line for driving within the headland
         self.p_gain_orient_headland = rospy.get_param('~p_gain_orient_headland')                        # [1.0] gain of the p-controller applied to orientation from an imaginary line for driving within the headland
@@ -118,12 +122,13 @@ class MoveRobotPathPattern:
         return:             [False, True] end of row reached (True) or not (False)
         """
 
-        x_min = -0.3
-        x_max = 1.0
+        x_min = 0.4
+        x_max = 1.4
         y_min = -self.row_width
         y_max = self.row_width
         self.laser_box_drive_row = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
         self.x_mean = np.mean(self.laser_box_drive_row[0,:])
+        print(self.laser_box_drive_row)
         end_of_row = self.x_mean < -0.5 or np.isnan(self.x_mean)
         return end_of_row
 
@@ -427,7 +432,7 @@ class MoveRobotPathPattern:
 
         box_height = self.row_width/3
         box_width = 3.0 # in case the robot is 1 m within headland and 1 m of plants are missing at the end of the row
-        x_min_detect_row = 0 #self.row_width - self.x_front_laser_in_base_link - box_height/2
+        x_min_detect_row = self.x_front_laser_in_base_link #self.row_width - self.x_front_laser_in_base_link - box_height/2
         x_max_detect_row = self.row_width - self.x_front_laser_in_base_link + box_height/2
         which_turn = self.path_pattern[1]
         if which_turn == 'L':
