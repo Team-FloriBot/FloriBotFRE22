@@ -77,6 +77,14 @@ Sobald die Simulation läuft, kann mit dem Roboter mit folgendem Befehl eine Ges
 Die Simulation kann mit der Tastenkombination Strg+C beendet werden. 
 
 # Docker Umgebung
+Bevor mit der Docker Umgebung gearbeitet werden kann, müssen zuerst noch docker und compose installiert werden. Das geht mit 
+
+    sudo apt install docker.io
+    
+und 
+
+    sudo apt install docker-compose
+
 Für die Docker Umgebung kann sich an den FRE Repo's orientiert werden. Um ein Docker Image vom Floribot zu erstellen, muss dich sich das Docker-File im Worksapce befinden und dann folgender Befehl ausgeführt werden (nähere Infos dazu: https://github.com/FieldRobotEvent/example_ws)
 
     docker build . -t robot_workspace
@@ -107,3 +115,14 @@ benutzen, um die Simulation vollständig zu beenden.
 Um den Docker Simulationscontainer zu aktualisieren fogledenn Befehl ausführen: 
 
     docker pull fieldrobotevent/simulation:latest
+    
+# Debugging im GazeboWeb Docker 
+Um im GazeboWeb/ Dockergesteuerten Umgebung zu debuggen, muss ein neues Terminal geöffnet werden und folgender Befehl eingegeben werden, während GazeboWeb läuft:
+
+    docker exec -it robot /bin/bash
+    
+Um auf die einzelnen Topics zuzugreifen, muss noch source gesetzt werden. Dafür muss man:
+
+    source /catkin/devel/setup.bash
+    
+Nun können Topics und Nodes angewählt werden.
