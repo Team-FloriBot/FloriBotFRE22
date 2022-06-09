@@ -14,11 +14,11 @@ import collections
 
 class MoveRobotPathPattern:
     def __init__(self):
-        #self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
-        #self.sub_laser = rospy.Subscriber("laser_scanner_rear", LaserScan, self.laser_callback_rear, queue_size=3)    # [Laserscan] subscriber on /laser_scanner_rear
+        self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
+        self.sub_laser = rospy.Subscriber("laser_scanner_rear", LaserScan, self.laser_callback_rear, queue_size=3)    # [Laserscan] subscriber on /laser_scanner_rear
         
-        self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
-        self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)
+        #self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
+        #self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)
         
         self.pub_vel = rospy.Publisher("cmd_vel", Twist, queue_size=1)                                  # [Twist] publisher on /cmd_vel
         self.p_gain_offset_headland = rospy.get_param('~p_gain_offset_headland')                        # [1.0] gain of the p-controller applied to offset from an imaginary line for driving within the headland
@@ -51,6 +51,7 @@ class MoveRobotPathPattern:
         self.angle_valid = 0.0                                                                          # [rad] valid mid-row angle applicable for robot control
         self.offset_valid = 0.0                                                                         # [m] valid mid-row offset applicable for robot control
         self.time_start = rospy.Time.now()                                                              # [rospy.Time] timestamp used in state_headlands
+        self.time_exit_row = rospy.Time.now()
         self.laser_box_drive_headland = np.zeros((10,2))
         self.laser_box_detect_row = np.zeros((10,2))
         self.laser_box_drive_row = np.zeros((10,2)) 
@@ -77,7 +78,7 @@ class MoveRobotPathPattern:
     ######### Miscellaneous Methods #########
     #########################################
 
-    def scan2cart_w_ign(self, scan, min_range=1.0, max_range=30.0):
+    def scan2cart_w_ign(self, scan, min_range=0.05, max_range=5.0):
         """
         Module converting a ROS LaserScan into cartesian coordinates.
         param1 scan:        [LaserScan] raw laser scan
@@ -122,14 +123,13 @@ class MoveRobotPathPattern:
         return:             [False, True] end of row reached (True) or not (False)
         """
 
-        x_min = 0.4
+        x_min = 0
         x_max = 1.4
         y_min = -self.row_width
         y_max = self.row_width
         self.laser_box_drive_row = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
         self.x_mean = np.mean(self.laser_box_drive_row[0,:])
-        print(self.laser_box_drive_row)
-        end_of_row = self.x_mean < -0.5 or np.isnan(self.x_mean)
+        end_of_row = self.x_mean < self.x_front_laser_in_base_link #and ~np.isnan(self.x_mean)
         return end_of_row
 
     def detect_robot_running_crazy(self, scan, collisions_thresh, collision_reset_time):
@@ -172,7 +172,7 @@ class MoveRobotPathPattern:
         return robot_running_crazy
     
     def laser_box(self, scan, x_min, x_max, y_min, y_max):
-        xy_all = self.scan2cart_wo_ign(scan)
+        xy_all = self.scan2cart_w_ign(scan)
         allow_x1 = xy_all[0,:] > x_min
         allow_x2 = xy_all[0,:] < x_max
         allow_x = np.logical_and(allow_x1, allow_x2)
@@ -226,8 +226,9 @@ class MoveRobotPathPattern:
         cmd_vel.linear.x = 0.0
         cmd_vel.angular.z = 0.0
         pub_vel.publish(cmd_vel)
-        t = 15.0 # [s] period of time that the robot waits before entering the first row
-        if rospy.Time.now() - self.time_start > rospy.Duration.from_sec(t):                
+        t = 6.0 # [s] period of time that the robot waits before entering the first row
+
+        if rospy.Time.now() - self.time_start > rospy.Duration.from_sec(t):          
             return "state_in_row"
         else:
             return "state_wait_at_start"
@@ -318,6 +319,7 @@ class MoveRobotPathPattern:
         elif end_of_row:
             # Check if path pattern has already been completed
             if len(self.path_pattern) > 0:
+                self.time_exit_row = rospy.Time.now()
                 return "state_turn_exit_row"
             else:
                 "state_finished"
@@ -333,7 +335,15 @@ class MoveRobotPathPattern:
         # The scan points falling in this box are evaluated:
         # use the mean of x-coordinates to turn out of the row correctly
 
-        self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
+        self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=5.0)
+        cmd_vel = Twist()
+
+        # First drive 0.5m forward to leave the row
+        if rospy.Time.now() - self.time_exit_row < rospy.Duration.from_sec(1.5):
+            cmd_vel.linear.x = 0.5
+            cmd_vel.angular.z = 0
+            pub_vel.publish(cmd_vel)
+            return "state_turn_exit_row"            
 
         # extract next turn from path pattern
         # and check direction ('L' or 'R' ?)
@@ -530,7 +540,7 @@ class MoveRobotPathPattern:
             cmd_vel = Twist()
             cmd_vel.linear.x = self.max_lin_vel_in_headland
             print("miny", np.min(self.laser_box_drive_headland[1,:]),"error_offset",error_offset, "act_offset", act_offset)
-            alpha = 0.4
+            alpha = 0.6
             cmd_vel.angular.z = alpha*act_offset + (1-alpha)*act_orient
             pub_vel.publish(cmd_vel)  
             return "state_headlands"
