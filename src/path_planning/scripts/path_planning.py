@@ -221,7 +221,7 @@ class MoveRobotPathPattern:
         cmd_vel.linear.x = 0.0
         cmd_vel.angular.z = 0.0
         pub_vel.publish(cmd_vel)
-        t = 2.0 # [s] period of time that the robot waits before entering the first row
+        t = 15.0 # [s] period of time that the robot waits before entering the first row
         if rospy.Time.now() - self.time_start > rospy.Duration.from_sec(t):                
             return "state_in_row"
         else:
