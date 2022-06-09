@@ -427,7 +427,7 @@ class MoveRobotPathPattern:
 
         box_height = self.row_width/3
         box_width = 3.0 # in case the robot is 1 m within headland and 1 m of plants are missing at the end of the row
-        x_min_detect_row = self.row_width - self.x_front_laser_in_base_link - box_height/2
+        x_min_detect_row = 0 #self.row_width - self.x_front_laser_in_base_link - box_height/2
         x_max_detect_row = self.row_width - self.x_front_laser_in_base_link + box_height/2
         which_turn = self.path_pattern[1]
         if which_turn == 'L':
@@ -436,7 +436,7 @@ class MoveRobotPathPattern:
         elif which_turn == 'R':
             y_min_detect_row = -box_width
             y_max_detect_row = 0.0
-        self.laser_box_detect_row = self.laser_box(self.scan, x_min_detect_row, x_max_detect_row, y_min_detect_row, y_max_detect_row)
+        self.laser_box_detect_row = self.laser_box(self.scan_front, x_min_detect_row, x_max_detect_row, y_min_detect_row, y_max_detect_row)
 
         # Count the scan points within the defined box and
         # identify whether a row is seen or the space in between.
@@ -448,6 +448,11 @@ class MoveRobotPathPattern:
         there_is_row = num_scan_dots > upper_thresh_scan_points
         there_is_no_row = num_scan_dots < lower_thresh_scan_points
         print("row detection dots", num_scan_dots)
+        print("there_is_row", there_is_row)
+        print("there_is_no_row", there_is_no_row)
+        print("self.trans_row2norow", self.trans_row2norow)
+        print("self.trans_norow2row", self.trans_norow2row)
+
 
         # Count the transitions 
         # from seeing a row to seeing the space in between or 
@@ -565,6 +570,7 @@ class MoveRobotPathPattern:
         if which_row == 0:
             dist_x = 0.0
 
+        print("y_mean_old", self.y_mean_old)
         print("y_mean", self.y_mean)
         y_close_to_zero = abs(self.y_mean) < 0.1
         y_diff_thresh = np.abs(self.y_mean*self.y_mean_old) < 0.1
