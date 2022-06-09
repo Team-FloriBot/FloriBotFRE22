@@ -11,7 +11,8 @@ RUN apt-get update && \
   apt-get -y --no-install-recommends install \
     curl \
     git \
-    python3-pip && \
+    python3-pip \
+    python-is-python3 && \
   rm -rf /var/lib/apt/lists/*
 
 # Install ROS dependencies (this is the software required by your own robot). Extend this list if your robot has more dependencies.
@@ -44,6 +45,8 @@ RUN apt-get -y remove curl
 # using 'RUN git clone https://github.com/my-robot-repository /catkin' if you like, but be sure to put the files in a folder named '/catkin'! 
 # COPY src /catkin/src
 RUN git clone https://github.com/Team-FloriBot/FloriBotFRE22.git /catkin
+RUN cd /catkin && git submodule init
+RUN cd /catkin && git submodule update
 
 # Install the dependencies of the repository that are listed in the packages.xml files.
 RUN apt-get update && \
