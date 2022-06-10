@@ -11,8 +11,7 @@ RUN apt-get update && \
   apt-get -y --no-install-recommends install \
     curl \
     git \
-    python3-pip \
-    python-is-python3 && \
+    python3-pip && \
   rm -rf /var/lib/apt/lists/*
 
 # Install ROS dependencies (this is the software required by your own robot). Extend this list if your robot has more dependencies.
@@ -44,9 +43,7 @@ RUN apt-get -y remove curl
 # Copy the content of the src folder into the container in the folder '/catkin/src'. You can replace this by cloning your workspace from GIT
 # using 'RUN git clone https://github.com/my-robot-repository /catkin' if you like, but be sure to put the files in a folder named '/catkin'! 
 # COPY src /catkin/src
-RUN git clone https://github.com/Team-FloriBot/FloriBotFRE22.git /catkin
-RUN cd /catkin && git submodule init
-RUN cd /catkin && git submodule update
+RUN git clone https://github.com/Euleeee/Floribot_Simulation.git /catkin
 
 # Install the dependencies of the repository that are listed in the packages.xml files.
 RUN apt-get update && \
@@ -71,4 +68,4 @@ ENV ROS_MASTER_URI=http://simulation:11311
 # this line to start your own robot. The ${TASK_NUMBER} variable will be 1 during task 1, 2 during task 2 etc. You can use this 
 # variable set the robot task as is done below. Your launch file is responsible for spawning the robot description in the virual_maize_field
 # package.
-CMD  roslaunch floribot_simulation FloriBot_Docker1.launch --wait --screen; sleep 999999
+CMD  roslaunch floribot_simulation FloriBot_Docker.launch --wait --screen; sleep 999999

@@ -16,6 +16,10 @@ class MoveRobotPathPattern:
     def __init__(self):
         self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
         self.sub_laser = rospy.Subscriber("laser_scanner_rear", LaserScan, self.laser_callback_rear, queue_size=3)    # [Laserscan] subscriber on /laser_scanner_rear
+        
+        #self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
+        #self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)
+        
         self.pub_vel = rospy.Publisher("cmd_vel", Twist, queue_size=1)                                  # [Twist] publisher on /cmd_vel
         self.p_gain_offset_headland = rospy.get_param('~p_gain_offset_headland')                        # [1.0] gain of the p-controller applied to offset from an imaginary line for driving within the headland
         self.p_gain_orient_headland = rospy.get_param('~p_gain_orient_headland')                        # [1.0] gain of the p-controller applied to orientation from an imaginary line for driving within the headland
@@ -47,6 +51,7 @@ class MoveRobotPathPattern:
         self.angle_valid = 0.0                                                                          # [rad] valid mid-row angle applicable for robot control
         self.offset_valid = 0.0                                                                         # [m] valid mid-row offset applicable for robot control
         self.time_start = rospy.Time.now()                                                              # [rospy.Time] timestamp used in state_headlands
+        self.time_exit_row = rospy.Time.now()
         self.laser_box_drive_headland = np.zeros((10,2))
         self.laser_box_detect_row = np.zeros((10,2))
         self.laser_box_drive_row = np.zeros((10,2)) 
@@ -73,7 +78,7 @@ class MoveRobotPathPattern:
     ######### Miscellaneous Methods #########
     #########################################
 
-    def scan2cart_w_ign(self, scan, min_range=1.0, max_range=30.0):
+    def scan2cart_w_ign(self, scan, min_range=0.05, max_range=5.0):
         """
         Module converting a ROS LaserScan into cartesian coordinates.
         param1 scan:        [LaserScan] raw laser scan
@@ -118,13 +123,13 @@ class MoveRobotPathPattern:
         return:             [False, True] end of row reached (True) or not (False)
         """
 
-        x_min = -0.3
-        x_max = 1.0
+        x_min = 0
+        x_max = 1.4
         y_min = -self.row_width
         y_max = self.row_width
         self.laser_box_drive_row = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
         self.x_mean = np.mean(self.laser_box_drive_row[0,:])
-        end_of_row = self.x_mean < -0.5 or np.isnan(self.x_mean)
+        end_of_row = self.x_mean < self.x_front_laser_in_base_link #and ~np.isnan(self.x_mean)
         return end_of_row
 
     def detect_robot_running_crazy(self, scan, collisions_thresh, collision_reset_time):
@@ -167,7 +172,7 @@ class MoveRobotPathPattern:
         return robot_running_crazy
     
     def laser_box(self, scan, x_min, x_max, y_min, y_max):
-        xy_all = self.scan2cart_wo_ign(scan)
+        xy_all = self.scan2cart_w_ign(scan)
         allow_x1 = xy_all[0,:] > x_min
         allow_x2 = xy_all[0,:] < x_max
         allow_x = np.logical_and(allow_x1, allow_x2)
@@ -221,8 +226,9 @@ class MoveRobotPathPattern:
         cmd_vel.linear.x = 0.0
         cmd_vel.angular.z = 0.0
         pub_vel.publish(cmd_vel)
-        t = 2.0 # [s] period of time that the robot waits before entering the first row
-        if rospy.Time.now() - self.time_start > rospy.Duration.from_sec(t):                
+        t = 6.0 # [s] period of time that the robot waits before entering the first row
+
+        if rospy.Time.now() - self.time_start > rospy.Duration.from_sec(t):          
             return "state_in_row"
         else:
             return "state_wait_at_start"
@@ -313,6 +319,7 @@ class MoveRobotPathPattern:
         elif end_of_row:
             # Check if path pattern has already been completed
             if len(self.path_pattern) > 0:
+                self.time_exit_row = rospy.Time.now()
                 return "state_turn_exit_row"
             else:
                 "state_finished"
@@ -328,7 +335,15 @@ class MoveRobotPathPattern:
         # The scan points falling in this box are evaluated:
         # use the mean of x-coordinates to turn out of the row correctly
 
-        self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
+        self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=5.0)
+        cmd_vel = Twist()
+
+        # First drive 0.5m forward to leave the row
+        if rospy.Time.now() - self.time_exit_row < rospy.Duration.from_sec(1.5):
+            cmd_vel.linear.x = 0.5
+            cmd_vel.angular.z = 0
+            pub_vel.publish(cmd_vel)
+            return "state_turn_exit_row"            
 
         # extract next turn from path pattern
         # and check direction ('L' or 'R' ?)
@@ -427,7 +442,7 @@ class MoveRobotPathPattern:
 
         box_height = self.row_width/3
         box_width = 3.0 # in case the robot is 1 m within headland and 1 m of plants are missing at the end of the row
-        x_min_detect_row = self.row_width - self.x_front_laser_in_base_link - box_height/2
+        x_min_detect_row = self.x_front_laser_in_base_link #self.row_width - self.x_front_laser_in_base_link - box_height/2
         x_max_detect_row = self.row_width - self.x_front_laser_in_base_link + box_height/2
         which_turn = self.path_pattern[1]
         if which_turn == 'L':
@@ -436,7 +451,7 @@ class MoveRobotPathPattern:
         elif which_turn == 'R':
             y_min_detect_row = -box_width
             y_max_detect_row = 0.0
-        self.laser_box_detect_row = self.laser_box(self.scan, x_min_detect_row, x_max_detect_row, y_min_detect_row, y_max_detect_row)
+        self.laser_box_detect_row = self.laser_box(self.scan_front, x_min_detect_row, x_max_detect_row, y_min_detect_row, y_max_detect_row)
 
         # Count the scan points within the defined box and
         # identify whether a row is seen or the space in between.
@@ -448,6 +463,11 @@ class MoveRobotPathPattern:
         there_is_row = num_scan_dots > upper_thresh_scan_points
         there_is_no_row = num_scan_dots < lower_thresh_scan_points
         print("row detection dots", num_scan_dots)
+        print("there_is_row", there_is_row)
+        print("there_is_no_row", there_is_no_row)
+        print("self.trans_row2norow", self.trans_row2norow)
+        print("self.trans_norow2row", self.trans_norow2row)
+
 
         # Count the transitions 
         # from seeing a row to seeing the space in between or 
@@ -520,7 +540,7 @@ class MoveRobotPathPattern:
             cmd_vel = Twist()
             cmd_vel.linear.x = self.max_lin_vel_in_headland
             print("miny", np.min(self.laser_box_drive_headland[1,:]),"error_offset",error_offset, "act_offset", act_offset)
-            alpha = 0.4
+            alpha = 0.6
             cmd_vel.angular.z = alpha*act_offset + (1-alpha)*act_orient
             pub_vel.publish(cmd_vel)  
             return "state_headlands"
@@ -565,6 +585,7 @@ class MoveRobotPathPattern:
         if which_row == 0:
             dist_x = 0.0
 
+        print("y_mean_old", self.y_mean_old)
         print("y_mean", self.y_mean)
         y_close_to_zero = abs(self.y_mean) < 0.1
         y_diff_thresh = np.abs(self.y_mean*self.y_mean_old) < 0.1
