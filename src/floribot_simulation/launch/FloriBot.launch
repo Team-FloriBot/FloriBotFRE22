@@ -31,6 +31,9 @@
   <!-- Include Wheel Speed Publisher from Ros to Gazebo -->
   <include file="$(find base2gazebo)/launch/base2gazebo.launch"></include>
 
+  <!-- Packages for Object Detection and Mapping """"""""""""""""""""""""""""""""""""-->
+  <include file="$(find object_detection)/launch/detection.launch"></include>
+  <!--"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""-->
 
   
   <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
