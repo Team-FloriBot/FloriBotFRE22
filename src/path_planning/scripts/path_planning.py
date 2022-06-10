@@ -14,11 +14,20 @@ import collections
 
 class MoveRobotPathPattern:
     def __init__(self):
-        self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
-        self.sub_laser = rospy.Subscriber("laser_scanner_rear", LaserScan, self.laser_callback_rear, queue_size=3)    # [Laserscan] subscriber on /laser_scanner_rear
+        self.laserscanner_topic = rospy.get_param('~laserscanner_topic')                        # [1.0] gain of the p-controller applied to offset from an imaginary line for driving within the headland
+        if self.laserscanner_topic == 0:
+            self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
+            self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)
         
-        #self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
-        #self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)
+        elif self.laserscanner_topic == 1:
+            self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
+            self.sub_laser = rospy.Subscriber("laser_scanner_rear", LaserScan, self.laser_callback_rear, queue_size=3)    # [Laserscan] subscriber on /laser_scanner_rear
+        else:
+            print('Laserscannerparameter doesnt set')
+            return
+
+        self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
+        self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)
         
         self.pub_vel = rospy.Publisher("cmd_vel", Twist, queue_size=1)                                  # [Twist] publisher on /cmd_vel
         self.p_gain_offset_headland = rospy.get_param('~p_gain_offset_headland')                        # [1.0] gain of the p-controller applied to offset from an imaginary line for driving within the headland
@@ -554,7 +563,7 @@ class MoveRobotPathPattern:
         # self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
         # the robot has always to see an uneven number of rows
         x_min = 0.0
-        x_max = 2.5
+        x_max = 1.0
         y_min = -1.2*self.row_width
         y_max = 1.2*self.row_width
         self.laser_box_drive_headland = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
@@ -588,7 +597,7 @@ class MoveRobotPathPattern:
         print("y_mean_old", self.y_mean_old)
         print("y_mean", self.y_mean)
         y_close_to_zero = abs(self.y_mean) < 0.1
-        y_diff_thresh = np.abs(self.y_mean*self.y_mean_old) < 0.1
+        y_diff_thresh = np.abs(self.y_mean-self.y_mean_old) < 0.1
         if y_close_to_zero and y_diff_thresh:
             # reset variable
             self.y_mean_old = 0.0
