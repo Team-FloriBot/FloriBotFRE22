@@ -69,6 +69,12 @@
 
 </xacro:macro>
 
+<xacro:macro name = "wheelColor" params = "linkName">
+  <gazebo reference="${linkName}">
+    <material>Gazebo/Grey</material>
+  </gazebo>
+</xacro:macro>
+
   <!-- Base Link -->
   <link name="base_link">
       <visual>
@@ -549,6 +555,12 @@
         <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
       </inertial>
   </link>
+
+  <!-- Wheel Colors-->
+  <xacro:wheelColor linkName="frontLeft" />
+  <xacro:wheelColor linkName="frontRight" />
+  <xacro:wheelColor linkName="rearLeft" />
+  <xacro:wheelColor linkName="rearRight" />
 
 <!-- Gazebo plugin for ROS Control -->
   <gazebo>
