@@ -71,9 +71,16 @@
 
 <xacro:macro name = "wheelColor" params = "linkName">
   <gazebo reference="${linkName}">
-    <material>Gazebo/Grey</material>
+    <material>Gazebo/FlatBlack</material>
   </gazebo>
 </xacro:macro>
+
+<xacro:macro name= "darkGreyColor" params = "linkName">
+  <gazebo reference="${linkName}">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+</xacro:macro>
+
 
   <!-- Base Link -->
   <link name="base_link">
@@ -122,6 +129,10 @@
       </inertial>
   </link>
 
+  <gazebo reference="Vorderwagen">
+      <material>Gazebo/Grey</material>
+  </gazebo>
+
   <!-- Kamera vorne-->
   <xacro:sensor_d435i name="front_camera" parent="base_link">
     <origin xyz="${x_camera_front} 0 ${camera_height}" rpy="0 ${camera_angle} 0"/>
@@ -143,6 +154,8 @@
         <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
       </inertial>
   </link>
+  
+  <xacro:darkGreyColor linkName = "CameraFrontPositiv" />
 
   <joint name="jointCameraFrontPositiv" type="fixed">
        <parent link="base_link"/>
@@ -167,6 +180,8 @@
         <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
       </inertial>
   </link>
+
+  <xacro:darkGreyColor linkName = "CameraFrontNegativ" />
 
   <joint name="jointCameraFrontNegativ" type="fixed">
       <parent link="CameraFrontPositiv"/>
@@ -196,6 +211,8 @@
       <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
     </inertial>
   </link>
+
+  <xacro:darkGreyColor linkName = "laser_front_box" />
 
   <joint name="joint_laser_box" type="fixed">
      <parent link="base_link"/>
@@ -247,6 +264,8 @@
       </inertial>
   </link>
 
+  <xacro:darkGreyColor linkName = "Gelenkteil_1" />
+
  <!-- Gelenk zwischen den beiden Verbindungsstuecken -->
   <joint name="Gelenk" type="revolute">
   <axis xyz="1 0 0"/>
@@ -279,6 +298,8 @@
         <inertia ixx="0.000004" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.000004"/>
       </inertial>
   </link>
+
+  <xacro:darkGreyColor linkName = "Gelenkteil_2" />
 
  <!-- Gelenk zwischen Verbindungsstueck 2 und Hinterwagen -->
   <joint name="Gelenkteil_2_zu_Hinterwagen" type="fixed">
@@ -345,6 +366,10 @@
       </inertial>
   </link>
 
+  <gazebo reference="Hinterwagen">
+      <material>Gazebo/Grey</material>
+  </gazebo>
+
   <!-- Kamera hinten-->
   <xacro:sensor_d435i name="rear_camera" parent="Hinterwagen">
     <origin xyz="${x_camera_back} 0 ${camera_height}" rpy="0 ${camera_angle} 3.14"/>
@@ -367,6 +392,8 @@
         <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
       </inertial>
   </link>
+
+  <xacro:darkGreyColor linkName = "CameraRearPositiv" />
 
   <joint name="jointCameraRearPositiv" type="fixed">
        <parent link="Hinterwagen"/>
@@ -391,6 +418,8 @@
         <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
       </inertial>
   </link>
+
+  <xacro:darkGreyColor linkName = "CameraRearNegativ" />
 
   <joint name="jointCameraRearNegativ" type="fixed">
        <parent link="CameraRearPositiv"/>
