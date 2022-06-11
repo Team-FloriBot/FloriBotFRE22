@@ -10,20 +10,26 @@ from sensor_msgs.msg import LaserScan
 import numpy as np
 import matplotlib.pyplot as plt
 import collections
+import os
+import rospkg
 
 
 class MoveRobotPathPattern:
     def __init__(self):
-        self.laserscanner_topic = rospy.get_param('~laserscanner_topic')                        # [1.0] gain of the p-controller applied to offset from an imaginary line for driving within the headland
-        if self.laserscanner_topic == 0:
+        self.real_sim_parameter = rospy.get_param('~real_sim_parameter')         
+        if self.real_sim_parameter == 0:  # Real Robot
             self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
             self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)
+            self.path_pattern = rospy.get_param('~path_pattern')                                         # [str] path pattern describing the robots trajectory through the field e.g. S-1L-2L-1L-0R-F
+            self.path_pattern = self.path_pattern.replace(" ", "")                                          # remove spaces: S 1L 2L 1L 0R F --> S1L2L1L0RF
+            self.path_pattern = self.path_pattern[1:-1]                                                     # remove S (Start) and F (Finish): S1L2L1L1RF --> 1L2L1L1R
+
         
-        elif self.laserscanner_topic == 1:
+        elif self.real_sim_parameter == 1:  # Simulation
             self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
             self.sub_laser = rospy.Subscriber("laser_scanner_rear", LaserScan, self.laser_callback_rear, queue_size=3)    # [Laserscan] subscriber on /laser_scanner_rear
         else:
-            print('Laserscannerparameter doesnt set')
+            print('Robot/Simulation Parameter doesnt set')
             return
 
         self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
@@ -35,12 +41,9 @@ class MoveRobotPathPattern:
         self.max_lin_vel_in_row = rospy.get_param('~max_lin_vel_in_row')                                # [m/s] maximum linear velocity for driving within a row
         self.max_lin_vel_in_headland= rospy.get_param('~max_lin_vel_in_headland')                       # [m/s] maximum linear velocity for driving within the headland
         self.max_ang_vel_robot= rospy.get_param('~max_ang_vel_robot')                                   # [rad/s] maximum angluar velocity of robot
-        self.path_pattern = rospy.get_param('~path_pattern')                                            # [str] path pattern describing the robots trajectory through the field e.g. S-1L-2L-1L-0R-F
         self.lin_vel_turn = rospy.get_param('~lin_vel_turn')                                            # [m/s] linear x velocity while turns
         self.laser_scanner_coord_gazebo = rospy.get_param('~laser_scanner_coord_gazebo')                # [] parameter if the laserscanner coord is showing in the other direction of the robot coord systen
-        self.path_pattern = self.path_pattern.replace(" ", "")                                          # remove spaces: S 1L 2L 1L 0R F --> S1L2L1L0RF
-        self.path_pattern = self.path_pattern[1:-1]                                                     # remove S (Start) and F (Finish): S1L2L1L1RF --> 1L2L1L0R
-
+        
         self.scan_front = LaserScan()                                                                   # [Laserscan] saving the current laser scan
         self.scan_rear = LaserScan()
         self.scan = LaserScan()
@@ -229,6 +232,20 @@ class MoveRobotPathPattern:
         self.scan_rear = scan
         return None
 
+    def get_path_pattern(self):
+        # Read the driving directions from the file
+        pkg_path = rospkg.RosPack().get_path("virtual_maize_field")
+        dp_path = os.path.join(pkg_path, "map/driving_pattern.txt")
+
+        with open(dp_path) as direction_f:
+            directions = direction_f.readline()
+
+        self.path_pattern = directions.replace(" – ", "")
+        self.path_pattern = self.path_pattern[1:-2]
+        print(self.path_pattern)
+        
+        return
+
     ##########################################
     ######### States of Statemachine #########
     ##########################################
@@ -240,8 +257,10 @@ class MoveRobotPathPattern:
         cmd_vel.angular.z = 0.0
         pub_vel.publish(cmd_vel)
         t = 6.0 # [s] period of time that the robot waits before entering the first row
-
-        if rospy.Time.now() - self.time_start > rospy.Duration.from_sec(t):          
+        
+        if rospy.Time.now() - self.time_start > rospy.Duration.from_sec(t):
+            if self.real_sim_parameter == 1:
+                self.get_path_pattern()         
             return "state_drive_to_row"
         else:
             return "state_wait_at_start"
