@@ -76,6 +76,7 @@ class MoveRobotPathPattern:
         # self.robot_running_crazy = False                                                                # [True, False] True if robot is driving through the field like a headless chicken
         # self.end_of_row_reached = False                                                                 # [True, False] True if robot has reached the end of the row
         self.time_start_reset_scan_dots = rospy.Time.now()
+        self.time_collision_detection = rospy.Time.now()
         self.scan_left_front = np.zeros((10,2))
         self.scan_right_front = np.zeros((10,2))
         self.scan_left_rear = np.zeros((10,2))
@@ -141,7 +142,7 @@ class MoveRobotPathPattern:
         end_of_row = self.x_mean < self.x_front_laser_in_base_link #and ~np.isnan(self.x_mean)
         return end_of_row
 
-    def detect_robot_running_crazy(self, scan, collisions_thresh, collision_reset_time):
+    def detect_robot_running_crazy(self, collisions_thresh, collision_reset_time, detection_rate):
         """
         Method that counts the number of collisions within a small laser box that
         is placed directly in front of the robot. If the robot is hitting several
@@ -157,18 +158,21 @@ class MoveRobotPathPattern:
                                         the collision counter will be reset
         """
         
-        nose_box_width = 0.10
-        nose_box_height = 0.05
-        x_min = 0.23 - nose_box_height/2
-        x_max = 0.23 + nose_box_height/2
+        nose_box_width = 0.40
+        nose_box_height = 0.15
+        x_min = self.x_front_laser_in_base_link - nose_box_height/2
+        x_max = self.x_front_laser_in_base_link + nose_box_height/2
         y_min = -nose_box_width/2
         y_max = nose_box_width/2
-        nose_box = self.laser_box(scan, x_min, x_max, y_min, y_max)
-        num_collisions = nose_box.shape[1]
-        self.collision_ctr_previous = self.collision_ctr
-        self.collision_ctr += num_collisions
-        robot_running_crazy = self.collision_ctr > collisions_thresh
-        print("number of collisions", self.collision_ctr)
+        if rospy.Time.now() - self.time_collision_detection > rospy.Duration.from_sec(detection_rate):
+            nose_box = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
+            num_collisions = nose_box.shape[1]
+            self.collision_ctr_previous = self.collision_ctr
+            self.collision_ctr += num_collisions
+            robot_running_crazy = self.collision_ctr > collisions_thresh
+            print("number of collisions", self.collision_ctr)
+        else:
+            self.time_collision_detection = rospy.Time.now()
 
         collision_rate = self.collision_ctr - self.collision_ctr_previous
         if collision_rate == 0:
@@ -335,7 +339,7 @@ class MoveRobotPathPattern:
 
         end_of_row = self.detect_row_end()
         print("End of row", end_of_row)
-        robot_running_crazy = self.detect_robot_running_crazy(self.scan_front, collisions_thresh=100, collision_reset_time=2.0)
+        robot_running_crazy = self.detect_robot_running_crazy(collisions_thresh=100, collision_reset_time=2.0, detection_rate=0.1)
 
         if robot_running_crazy:
             return "state_error"
