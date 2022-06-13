@@ -58,7 +58,7 @@ class MoveRobotPathPattern:
         self.row_width = 0.75                                                                           # [m] row width
         self.turn_l = np.pi/2                                                                           # [rad] angle defining a left turn
         self.turn_r = -np.pi/2                                                                          # [rad] angle defining a right turn
-        self.offset_radius = 0.00                                                                       # [m] radius offset for end of row turn
+        self.offset_radius = 0.05                                                                       # [m] radius offset for end of row turn
         self.state = "state_wait_at_start"                                                              # [str] state that the state machine starts with
         self.angle_valid = 0.0                                                                          # [rad] valid mid-row angle applicable for robot control
         self.offset_valid = 0.0                                                                         # [m] valid mid-row offset applicable for robot control
@@ -260,19 +260,19 @@ class MoveRobotPathPattern:
         cmd_vel.linear.x = 0.0
         cmd_vel.angular.z = 0.0
         pub_vel.publish(cmd_vel)
-        t = 6.0 # [s] period of time that the robot waits before entering the first row
+        t = 2.0 # [s] period of time that the robot waits before entering the first row
         
         if rospy.Time.now() - self.time_start > rospy.Duration.from_sec(t):
             if self.real_sim_parameter == 1:
                 self.get_path_pattern()         
-            return "state_drive_to_row"
+            return "state_in_row"
         else:
             return "state_wait_at_start"
 
     def state_drive_to_row(self, pub_vel):
         # State, if no points from the laserscanner are detected
 
-        laser_box_drive_to_row = self.laser_box(self.scan_front, 0.0, 0.6, -self.row_width, self.row_width)
+        laser_box_drive_to_row = self.laser_box(self.scan_front, 0.0, 0.4, -self.row_width, self.row_width)
         box_shape = laser_box_drive_to_row.shape[1]
         if box_shape > 20:                                   # TODO: Threshhold Wert -> muss eventuell angepasst werden
             return "state_in_row"
@@ -306,8 +306,8 @@ class MoveRobotPathPattern:
             self.scan_left_front = self.laser_box(self.scan_front, -0.2, 1.0, self.robot_width/2, self.row_width)
             self.scan_right_front = self.laser_box(self.scan_front, -0.2, 1.0, -self.row_width, -self.robot_width/2)"""
 
-        self.scan_left_front = self.laser_box(self.scan_front, 0.0, 0.6, self.robot_width/2, self.row_width)
-        self.scan_right_front = self.laser_box(self.scan_front, 0.0, 0.6, -self.row_width, -self.robot_width/2)
+        self.scan_left_front = self.laser_box(self.scan_front, 0.0, 1.0, self.robot_width/2, self.row_width)
+        self.scan_right_front = self.laser_box(self.scan_front, 0.0, 1.0, -self.row_width, -self.robot_width/2)
 
         #self.scan_left_rear = self.laser_box(self.scan_rear, -0.2, 1.0, self.robot_width/2, self.row_width)
         #self.scan_right_rear = self.laser_box(self.scan_rear, -0.2, 1.0, -self.row_width, -self.robot_width/2)
@@ -389,8 +389,8 @@ class MoveRobotPathPattern:
         cmd_vel = Twist()
 
         # First drive 0.5m forward to leave the row
-        if rospy.Time.now() - self.time_exit_row < rospy.Duration.from_sec(1.5):
-            cmd_vel.linear.x = 0.5
+        if rospy.Time.now() - self.time_exit_row < rospy.Duration.from_sec(2.5):
+            cmd_vel.linear.x = 0.3
             cmd_vel.angular.z = 0
             pub_vel.publish(cmd_vel)
             return "state_turn_exit_row"            
@@ -408,6 +408,9 @@ class MoveRobotPathPattern:
             radius = -self.row_width/2 - self.offset_valid - self.offset_radius
             y_min = -2
             y_max = 0.0
+
+        if radius > 0.535:  # Maximal möglicher Radius
+            radius = 0.535
 
         print("Radius", radius)
 
@@ -509,8 +512,8 @@ class MoveRobotPathPattern:
         # identify whether a row is seen or the space in between.
         # TODO:
         # bestimme thresholds emprisch
-        upper_thresh_scan_points = 20
-        lower_thresh_scan_points = 10
+        upper_thresh_scan_points = 13
+        lower_thresh_scan_points = 5
         num_scan_dots = self.laser_box_detect_row.shape[1]
         there_is_row = num_scan_dots > upper_thresh_scan_points
         there_is_no_row = num_scan_dots < lower_thresh_scan_points
@@ -623,6 +626,9 @@ class MoveRobotPathPattern:
             turn = self.turn_r
             radius = -self.row_width/2 - self.offset_valid - self.offset_radius
 
+        if radius > 0.535:  # Maximal möglicher Radius
+            radius = 0.535
+
         """ang_z = turn                            # [rad]
         dist_x = (self.row_width/2 + self.offset_radius) * abs(ang_z)  # [m]
         t = self.time_for_quater_turn           # [s]"""
@@ -651,6 +657,7 @@ class MoveRobotPathPattern:
 
             return "state_crop_path_pattern"
         else:
+            print("Raidus", radius)
             self.move_robot(pub_vel, self.lin_vel_turn,ang_vel)
             self.y_mean_old = self.y_mean
             return "state_turn_enter_row"
