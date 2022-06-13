@@ -59,7 +59,7 @@ class MoveRobotPathPattern:
         self.turn_l = np.pi/2                                                                           # [rad] angle defining a left turn
         self.turn_r = -np.pi/2                                                                          # [rad] angle defining a right turn
         self.offset_radius = 0.05                                                                       # [m] radius offset for end of row turn
-        self.state = "state_wait_at_start"                                                              # [str] state that the state machine starts with
+        self.state = "state_headlands"                                                              # [str] state that the state machine starts with
         self.angle_valid = 0.0                                                                          # [rad] valid mid-row angle applicable for robot control
         self.offset_valid = 0.0                                                                         # [m] valid mid-row offset applicable for robot control
         self.time_start = rospy.Time.now()                                                              # [rospy.Time] timestamp used in state_headlands
@@ -86,6 +86,7 @@ class MoveRobotPathPattern:
         self.scan_right_rear = np.zeros((10,2))
         self.robot_width = 0.41
         self.robot_length = 1.30
+        self.num_scan_dots_arr = []
 
     #########################################
     ######### Miscellaneous Methods #########
@@ -470,7 +471,7 @@ class MoveRobotPathPattern:
         # the robot has always to see an uneven number of rows
         x_min_drive_headland = -0.2
         x_max_drive_headland = 1.5*self.row_width
-        which_turn = self.path_pattern[1]
+        which_turn = 'L'
         if which_turn == 'L':
             y_min_drive_headland = 0.0
             y_max_drive_headland = 3.0
@@ -515,90 +516,92 @@ class MoveRobotPathPattern:
         upper_thresh_scan_points = 13
         lower_thresh_scan_points = 5
         num_scan_dots = self.laser_box_detect_row.shape[1]
+        self.num_scan_dots_arr.append(num_scan_dots)
         there_is_row = num_scan_dots > upper_thresh_scan_points
         there_is_no_row = num_scan_dots < lower_thresh_scan_points
         print("row detection dots", num_scan_dots)
-        print("there_is_row", there_is_row)
-        print("there_is_no_row", there_is_no_row)
-        print("self.trans_row2norow", self.trans_row2norow)
-        print("self.trans_norow2row", self.trans_norow2row)
+        return "state_headlands"
+        # # print("there_is_row", there_is_row)
+        # # print("there_is_no_row", there_is_no_row)
+        # # print("self.trans_row2norow", self.trans_row2norow)
+        # # print("self.trans_norow2row", self.trans_norow2row)
 
 
-        # Count the transitions 
-        # from seeing a row to seeing the space in between or 
-        # from seeing the space in between to seeing a row.        
-        if (there_is_no_row and self.trans_row2norow) or self.there_was_no_row:
-            self.there_was_no_row = True
-            if there_is_row:
-                self.ctr_trans_norow2row += 1
-                print("no row -> row")
-                self.there_was_no_row = False
-                self.trans_norow2row = True
-                self.trans_row2norow = False
+        # # Count the transitions 
+        # # from seeing a row to seeing the space in between or 
+        # # from seeing the space in between to seeing a row.        
+        # if (there_is_no_row and self.trans_row2norow) or self.there_was_no_row:
+        #     self.there_was_no_row = True
+        #     if there_is_row:
+        #         self.ctr_trans_norow2row += 1
+        #         print("no row -> row")
+        #         self.there_was_no_row = False
+        #         self.trans_norow2row = True
+        #         self.trans_row2norow = False
 
-        if (there_is_row and self.trans_norow2row) or self.there_was_row:
-            self.there_was_row = True
-            if there_is_no_row:
-                self.ctr_trans_row2norow += 1
-                print("row -> no row")
-                self.there_was_row = False
-                self.trans_norow2row = False
-                self.trans_row2norow = True
+        # if (there_is_row and self.trans_norow2row) or self.there_was_row:
+        #     self.there_was_row = True
+        #     if there_is_no_row:
+        #         self.ctr_trans_row2norow += 1
+        #         print("row -> no row")
+        #         self.there_was_row = False
+        #         self.trans_norow2row = False
+        #         self.trans_row2norow = True
         
-        # If the robot has go to e.g. the 3rd row on the left side,
-        # the following transitions must be detected in order to
-        # be able to turn into this row:
-        # row --> no row (this one is skipped)
-        # no row --> row
-        # row --> no row
-        # no row --> row
-        # Thus, we have 2 * 3rd row - 3 = 3 transitions
-        sum_transitions = self.ctr_trans_row2norow + self.ctr_trans_norow2row
-        which_row = int(self.path_pattern[0])
-        set_transitions = 2 * which_row - 3
+        # # If the robot has go to e.g. the 3rd row on the left side,
+        # # the following transitions must be detected in order to
+        # # be able to turn into this row:
+        # # row --> no row (this one is skipped)
+        # # no row --> row
+        # # row --> no row
+        # # no row --> row
+        # # Thus, we have 2 * 3rd row - 3 = 3 transitions
+        # sum_transitions = self.ctr_trans_row2norow + self.ctr_trans_norow2row
+        # which_row = int(self.path_pattern[0])
+        # set_transitions = 2 * which_row - 3
 
-        target_row_reached = sum_transitions >= set_transitions
-        if target_row_reached:
-            self.there_was_row = False
-            self.there_was_no_row = False
-            self.trans_norow2row = False
-            self.trans_row2norow = True
-            self.ctr_trans_row2norow = 0
-            self.ctr_trans_norow2row = 0
-            return "state_turn_enter_row"
-        else:
-            # The robot is passing by some rows.
-            # When the current section of path pattern is e.g. 3L,
-            # it passes by the first and second row on the left
-            # in order to turn into the third one.
-            # While passing by the robot is not ought to drive blindly
-            # but controlled. For doing so we evaluate the mean
-            # of the x-coordinates of all scan points that are
-            # in our scan box which is placed around the robot
-            # (see laser_callback). As long as the x-mean is around
-            # zero, the robot is passing by the desired rows
-            # orthogonally.
+        # target_row_reached = sum_transitions >= set_transitions
+        # if target_row_reached:
+        #     self.there_was_row = False
+        #     self.there_was_no_row = False
+        #     self.trans_norow2row = False
+        #     self.trans_row2norow = True
+        #     self.ctr_trans_row2norow = 0
+        #     self.ctr_trans_norow2row = 0
+        #     return "state_turn_enter_row"
+        # else:
+        #     # The robot is passing by some rows.
+        #     # When the current section of path pattern is e.g. 3L,
+        #     # it passes by the first and second row on the left
+        #     # in order to turn into the third one.
+        #     # While passing by the robot is not ought to drive blindly
+        #     # but controlled. For doing so we evaluate the mean
+        #     # of the x-coordinates of all scan points that are
+        #     # in our scan box which is placed around the robot
+        #     # (see laser_callback). As long as the x-mean is around
+        #     # zero, the robot is passing by the desired rows
+        #     # orthogonally.
             
-            setpoint_orient = 0                          # [rad]
-            setpoint_offset = turn_sign*self.row_width/2          # [m]
-            error_orient= setpoint_orient - self.x_mean
-            if turn_sign >= 0: # left turn
-                error_offset = setpoint_offset - np.min(self.laser_box_drive_headland[1,:])
-            else: # right turn
-                error_offset = setpoint_offset - np.max(self.laser_box_drive_headland[1,:])
+        #     setpoint_orient = 0                          # [rad]
+        #     setpoint_offset = turn_sign*self.row_width/2          # [m]
+        #     error_orient= setpoint_orient - self.x_mean
+        #     if turn_sign >= 0: # left turn
+        #         error_offset = setpoint_offset - np.min(self.laser_box_drive_headland[1,:])
+        #     else: # right turn
+        #         error_offset = setpoint_offset - np.max(self.laser_box_drive_headland[1,:])
 
-            act_orient = turn_sign * self.p_gain_orient_headland*error_orient
-            act_offset = -self.p_gain_offset_headland*error_offset          
+        #     act_orient = turn_sign * self.p_gain_orient_headland*error_orient
+        #     act_offset = -self.p_gain_offset_headland*error_offset          
 
-            # # TODO:
-            # # have a look at the exakt x_mean and set max_offset, make max_offset dependent on box width
-            cmd_vel = Twist()
-            cmd_vel.linear.x = self.max_lin_vel_in_headland
-            print("miny", np.min(self.laser_box_drive_headland[1,:]),"error_offset",error_offset, "act_offset", act_offset)
-            alpha = 0.6
-            cmd_vel.angular.z = alpha*act_offset + (1-alpha)*act_orient
-            pub_vel.publish(cmd_vel)  
-            return "state_headlands"
+        #     # # TODO:
+        #     # # have a look at the exakt x_mean and set max_offset, make max_offset dependent on box width
+        #     cmd_vel = Twist()
+        #     cmd_vel.linear.x = self.max_lin_vel_in_headland
+        #     print("miny", np.min(self.laser_box_drive_headland[1,:]),"error_offset",error_offset, "act_offset", act_offset)
+        #     alpha = 0.6
+        #     cmd_vel.angular.z = alpha*act_offset + (1-alpha)*act_orient
+        #     pub_vel.publish(cmd_vel)  
+        #     return "state_headlands"
 
     def state_turn_enter_row(self, pub_vel):
         # Extract scan points out of a rectangular box. This box is 
@@ -691,7 +694,7 @@ class MoveRobotPathPattern:
 
     def launch_state_machine(self):
         rate = rospy.Rate(10)
-        # fig = plt.figure(figsize=(7,20))
+        fig = plt.figure(figsize=(7,20))
         while not rospy.is_shutdown() and self.state != "state_done":
             if self.state == "state_wait_at_start":
                 self.state = self.state_wait_at_start(self.pub_vel)
@@ -715,14 +718,17 @@ class MoveRobotPathPattern:
                 self.state = self.state_error()
             else:
                 self.state = "state_done"
-            print(self.state)
+            # print(self.state)
             rate.sleep()
 
             # resolution = 0.10
             # hist_min = -1.5*self.row_width
             # hist_max = 1.5*self.row_width
             # bins = int(round((hist_max - hist_min) / resolution))
-
+            plt.plot(self.num_scan_dots_arr, "-r")
+            plt.draw()
+            plt.pause(0.05)
+            fig.clear
             # plt.subplot(311)
             # plt.hist(self.laser_box_drive_headland[0,:], bins, label='x', range=[hist_min, hist_max], density=True)
             # plt.axvline(self.x_mean, color='r', linestyle='dashed', linewidth=2)
