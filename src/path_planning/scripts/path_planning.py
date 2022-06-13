@@ -497,8 +497,8 @@ class MoveRobotPathPattern:
 
         box_height = self.row_width/3
         box_width = 3.0 # in case the robot is 1 m within headland and 1 m of plants are missing at the end of the row
-        x_min_detect_row = self.x_front_laser_in_base_link #self.row_width - self.x_front_laser_in_base_link - box_height/2
-        x_max_detect_row = self.row_width - self.x_front_laser_in_base_link + box_height/2
+        x_min_detect_row = self.row_width - box_height/2
+        x_max_detect_row = self.row_width + box_height/2
         which_turn = self.path_pattern[1]
         if which_turn == 'L':
             y_min_detect_row = 0.0
