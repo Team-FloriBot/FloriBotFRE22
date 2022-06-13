@@ -58,7 +58,7 @@ class MoveRobotPathPattern:
         self.row_width = 0.75                                                                           # [m] row width
         self.turn_l = np.pi/2                                                                           # [rad] angle defining a left turn
         self.turn_r = -np.pi/2                                                                          # [rad] angle defining a right turn
-        self.offset_radius = 0.05                                                                        # [m] radius offset for end of row turn
+        self.offset_radius = 0.00                                                                       # [m] radius offset for end of row turn
         self.state = "state_wait_at_start"                                                              # [str] state that the state machine starts with
         self.angle_valid = 0.0                                                                          # [rad] valid mid-row angle applicable for robot control
         self.offset_valid = 0.0                                                                         # [m] valid mid-row offset applicable for robot control
@@ -142,10 +142,10 @@ class MoveRobotPathPattern:
         y_max = self.row_width
         self.laser_box_drive_row = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
         self.x_mean = np.mean(self.laser_box_drive_row[0,:])
-        end_of_row = self.x_mean < self.x_front_laser_in_base_link #and ~np.isnan(self.x_mean)
+        end_of_row = self.x_mean < 0.3 #self.x_front_laser_in_base_link #and ~np.isnan(self.x_mean)
         return end_of_row
 
-    def detect_robot_running_crazy(self, collisions_thresh, collision_reset_time, detection_rate):
+    def detect_robot_running_crazy(self, collisions_thresh, collision_reset_time, sample_time):
         """
         Method that counts the number of collisions within a small laser box that
         is placed directly in front of the robot. If the robot is hitting several
@@ -159,15 +159,19 @@ class MoveRobotPathPattern:
         param3 collision_reset_time:    [s] if the robot is driving this amount of time 
                                         without collision,
                                         the collision counter will be reset
+        param4 sample_rate:             [s] the frequency the robot checks for plants on 
+                                        its way
         """
-        
+        # parameters specifiying laser box in front of robot, aka nose box
         nose_box_width = 0.40
         nose_box_height = 0.15
         x_min = self.x_front_laser_in_base_link - nose_box_height/2
         x_max = self.x_front_laser_in_base_link + nose_box_height/2
         y_min = -nose_box_width/2
         y_max = nose_box_width/2
-        if rospy.Time.now() - self.time_collision_detection > rospy.Duration.from_sec(detection_rate):
+        # every <sample_time> seconds count the number of scan points in the nose box
+        # these scan points resemble plants that the robot überfährt
+        if rospy.Time.now() - self.time_collision_detection > rospy.Duration.from_sec(sample_time):
             nose_box = self.laser_box(self.scan_front, x_min, x_max, y_min, y_max)
             num_collisions = nose_box.shape[1]
             self.collision_ctr_previous = self.collision_ctr
@@ -176,7 +180,7 @@ class MoveRobotPathPattern:
             print("number of collisions", self.collision_ctr)
         else:
             self.time_collision_detection = rospy.Time.now()
-
+        
         collision_rate = self.collision_ctr - self.collision_ctr_previous
         if collision_rate == 0:
             if rospy.Time.now() - self.time_start_reset_scan_dots > rospy.Duration.from_sec(collision_reset_time):
@@ -358,7 +362,7 @@ class MoveRobotPathPattern:
 
         end_of_row = self.detect_row_end()
         print("End of row", end_of_row)
-        robot_running_crazy = self.detect_robot_running_crazy(collisions_thresh=100, collision_reset_time=2.0, detection_rate=0.1)
+        robot_running_crazy = self.detect_robot_running_crazy(collisions_thresh=400, collision_reset_time=2.0, sample_time=0.2)
 
         if robot_running_crazy:
             return "state_error"
@@ -404,6 +408,8 @@ class MoveRobotPathPattern:
             radius = -self.row_width/2 - self.offset_valid - self.offset_radius
             y_min = -2
             y_max = 0.0
+
+        print("Radius", radius)
 
         # the robot has always to see an uneven number of rows
         x_min = -self.row_width
