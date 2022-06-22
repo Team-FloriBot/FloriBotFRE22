@@ -5,7 +5,7 @@ import actionlib
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
-from stg_msgs.msg import Bool, UInt32
+from std_msgs.msg import Bool, UInt32, String
 
 
 import numpy as np
@@ -23,17 +23,16 @@ class MoveRobotPathPattern:
             self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)                # [Laserscan] subscriber on /sensors/scanRear
             self.sub_automatic_mode = rospy.Subscriber("teleop/automatic_mode", Bool, self.automatic_mode_callback, queue_size=3)   # [Bool] subscriber on /teleop/automatic_mode 
             self.sub_teleop_cmd_vel = rospy.Subscriber("teleop/cmd_vel", Twist, self.teleop_cmd_vel_callback, queue_size=3)         # [Bool] subscriber on /teleop/automatic_mode 
+            self.sub_beep = rospy.Subscriber("fre_detections", String, self.beep_callback, queue_size=1)                # [Laserscan] subscriber on /sensors/scanRear
             self.path_pattern = rospy.get_param('~path_pattern')                                                                    # [str] path pattern describing the robots trajectory through the field e.g. S-1L-2L-1L-0R-F
             self.path_pattern = self.path_pattern.replace(" ", "")                                                                  # remove spaces: S 1L 2L 1L 0R F --> S1L2L1L0RF
-            self.path_pattern = self.path_pattern[1:-1]                                                                             # remove S (Start) and F (Finish): S1L2L1L1RF --> 1L2L1L1R
-            self.automatic_mode = False                                                                                             # [Bool] In automatic mode [True] the robot can drive autonomously, in manual mode [False] it is remote-controlled via the app                    
+            self.path_pattern = self.path_pattern[1:-1]                                                                         # remove S (Start) and F (Finish): S1L2L1L1RF --> 1L2L1L1R                    
 
-        
         elif self.real_sim_parameter == 1:  # Simulation
             self.sub_laser = rospy.Subscriber("laser_scanner_front", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
             self.sub_laser = rospy.Subscriber("laser_scanner_rear", LaserScan, self.laser_callback_rear, queue_size=3)    # [Laserscan] subscriber on /laser_scanner_rear
         else:
-            print('Robot/Simulation Parameter doesnt set')
+            print('Robot/Simulation Parameter not set')
             return
 
         self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
@@ -62,7 +61,7 @@ class MoveRobotPathPattern:
         self.row_width = 0.75                                                                           # [m] row width
         self.turn_l = np.pi/2                                                                           # [rad] angle defining a left turn
         self.turn_r = -np.pi/2                                                                          # [rad] angle defining a right turn
-        self.offset_radius = 0.0                                                                        # [m] radius offset for end of row turn
+        self.offset_radius = 0.00                                                                       # [m] radius offset for end of row turn
         self.state = "state_wait_at_start"                                                              # [str] state that the state machine starts with
         self.angle_valid = 0.0                                                                          # [rad] valid mid-row angle applicable for robot control
         self.offset_valid = 0.0                                                                         # [m] valid mid-row offset applicable for robot control
@@ -74,10 +73,10 @@ class MoveRobotPathPattern:
         self.xy_scan_raw = np.zeros((10,2))
         self.there_was_row = False
         self.there_was_no_row = False
-        self.trans_norow2row = False
-        self.trans_row2norow = True
-        self.ctr_trans_row2norow = 0
-        self.ctr_trans_norow2row = 0
+        self.trans_gap2row = False
+        self.trans_row2gap = True
+        self.ctr_trans_row2gap = 0
+        self.ctr_trans_gap2row = 0
         self.collision_ctr = 0                                                                          # [1] stores the scan dots seen in a small laser box right in front of the robot
         self.collision_ctr_previous = 0
         self.time_start_reset_scan_dots = rospy.Time.now()
@@ -88,7 +87,7 @@ class MoveRobotPathPattern:
         self.scan_right_rear = np.zeros((10,2))
         self.robot_width = 0.41
         self.robot_length = 1.30
-        
+        self.automatic_mode = False                                                                     # [Bool] In automatic mode [True] the robot can drive autonomously, in manual mode [False] it is remote-controlled via the app
 
     #########################################
     ######### Miscellaneous Methods #########
@@ -218,7 +217,7 @@ class MoveRobotPathPattern:
         return:             nothing
         """
         cmd_vel = Twist()
-        if not automatic_mode:
+        if not self.automatic_mode:
             cmd_vel.linear.x = 0.0
             cmd_vel.angular.z = 0.0
         else:
@@ -244,13 +243,20 @@ class MoveRobotPathPattern:
         return None
 
     def automatic_mode_callback(self, automatic_mode_bool):
-        if not automatic_mode_bool:
-            self.automatic_mode = automatic_mode_bool
+        self.automatic_mode = automatic_mode_bool.data
+        print("##################### self.automatic_mode:", self.automatic_mode)
         return None
     
     def teleop_cmd_vel_callback(self, teleop_cmd_vel):
-        self.pub_vel.publish(teleop_cmd_vel)
+        # if robot is in manual mode, the /teleop/cmd_vel topic of the app is remapped to /cmd_vel
+        if not self.automatic_mode:
+            self.pub_vel.publish(teleop_cmd_vel)
         return None
+
+    def beep_callback(self, beep_msg):
+        # bell key
+        print('\a') 
+        pass
 
     def get_path_pattern(self):
         # Read the driving directions from the file
@@ -271,10 +277,12 @@ class MoveRobotPathPattern:
     ##########################################
     def state_wait_at_start(self, pub_vel):
         # if in automatic mode directly transit to state_in_row
-        if automatic_mode:
+        if self.real_sim_parameter==1:
             self.get_path_pattern()               
             return "state_in_row"
         # if in manual mode the robot is driven via app to the beginning of the field
+        elif self.automatic_mode:
+            return "state_in_row"
         else:
             return "state_wait_at_start"
 
@@ -295,47 +303,22 @@ class MoveRobotPathPattern:
     def state_in_row(self, pub_vel):
         # TODO:
         # bring angular velocity in dependence of max_lin_vel_in_row
-        
-        # # This has been replaced by the two laser boxes
-        # angle_increment = self.scan.angle_increment
-        # angle_outer_limit_curr = self.scan.angle_max
-        # angle_outer_limit_targ = np.radians(135)
-        # angle_inner_limit_targ = np.radians(22.5)
-        # idx_ranges_outer = int(np.round((angle_outer_limit_curr - angle_outer_limit_targ) / angle_increment) + 1)
-        # idx_ranges_inner = int(np.round((angle_outer_limit_curr - angle_inner_limit_targ) / angle_increment) + 1)
-        # scan_cart = self.scan2cart_w_ign(self.scan, min_range=0.0, max_range=self.row_width)
-        # self.scan_left = scan_cart[:, -idx_ranges_inner:-idx_ranges_outer]
-        # self.scan_right = scan_cart[:, idx_ranges_outer:idx_ranges_inner]
 
-
-        """self.scan_left_front = self.laser_box(self.scan_front, -0.2, 0.4, self.robot_width/2, self.row_width)
-        self.scan_right_front = self.laser_box(self.scan_front, -0.2, 0.4, -self.row_width, -self.robot_width/2)
-
-        if np.isnan(self.scan_left_front.all()) or np.isnan(self.scan_right_front.all()): 
-            self.scan_left_front = self.laser_box(self.scan_front, -0.2, 1.0, self.robot_width/2, self.row_width)
-            self.scan_right_front = self.laser_box(self.scan_front, -0.2, 1.0, -self.row_width, -self.robot_width/2)"""
-
+        # the front laser scanner
         self.scan_left_front = self.laser_box(self.scan_front, 0.0, 1.0, self.robot_width/2, self.row_width)
         self.scan_right_front = self.laser_box(self.scan_front, 0.0, 1.0, -self.row_width, -self.robot_width/2)
-
-        #self.scan_left_rear = self.laser_box(self.scan_rear, -0.2, 1.0, self.robot_width/2, self.row_width)
-        #self.scan_right_rear = self.laser_box(self.scan_rear, -0.2, 1.0, -self.row_width, -self.robot_width/2)
-
         mean_left_front = np.nanmean(self.scan_left_front[1, :])
         mean_right_front = np.nanmean(self.scan_right_front[1, :])
-
-        # mean_left_rear = np.nanmean(self.scan_left_rear[1, :])
-        # mean_right_rear = np.nanmean(self.scan_right_rear[1, :])
-
-        #print ("scan_right", self.scan_right[1, :])
-        #print ("scan_left", self.scan_left[1, :])
-
         print ("mean_left_front: ", mean_left_front)
         print ("mean_right_front: ", mean_right_front)
 
+        # the rear laser scanner (not used yet)
+        #self.scan_left_rear = self.laser_box(self.scan_rear, -0.2, 1.0, self.robot_width/2, self.row_width)
+        #self.scan_right_rear = self.laser_box(self.scan_rear, -0.2, 1.0, -self.row_width, -self.robot_width/2)
+        # mean_left_rear = np.nanmean(self.scan_left_rear[1, :])
+        # mean_right_rear = np.nanmean(self.scan_right_rear[1, :])
         #print ("mean_left_rear: ", mean_left_rear)
         #print ("mean_right_rear: ", mean_right_rear)
-
 
         if np.isnan(mean_left_front) and not np.isnan(mean_right_front):
             offset = mean_right_front + self.row_width/2
@@ -361,16 +344,16 @@ class MoveRobotPathPattern:
         print("Normed Offset:", normed_offset)
 
         cmd_vel = Twist()
-        if not automatic_mode:
+        if not self.automatic_mode:
             cmd_vel.linear.x = 0.0
             cmd_vel.angular.z = 0.0
         else:
-            #cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - normed_offset**2)
-            #cmd_vel.angular.z = self.max_ang_vel_robot * np.sign(normed_offset) * normed_offset**2
+            # linear dependency
             cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - np.abs(normed_offset))
             cmd_vel.angular.z = self.max_ang_vel_robot * normed_offset
-        #print("Vel_lin", cmd_vel.linear.x)
-        #print("Vel_angle", cmd_vel.angular.z)
+            # quatdratic dependency
+            #cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - normed_offset**2)
+            #cmd_vel.angular.z = self.max_ang_vel_robot * np.sign(normed_offset) * normed_offset**2
         pub_vel.publish(cmd_vel)
 
         end_of_row = self.detect_row_end()
@@ -391,19 +374,19 @@ class MoveRobotPathPattern:
 
     def state_turn_exit_row(self, pub_vel):
         # TODO: 
-        # take the linear velocity the robot has at the end of the row
+        # use the linear velocity the robot has at the end of the row
         
         # Extract scan points out of a rectangular box. This box is 
         # placed around the robot with itself lying in the center.
-        # The scan points falling in this box are evaluated:
+        # All scan points falling in this box are evaluated:
         # use the mean of x-coordinates to turn out of the row correctly
 
         self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=5.0)
 
-        # First drive 0.5m forward to leave the row
-        if rospy.Time.now() - self.time_exit_row < rospy.Duration.from_sec(2.5):
+        # First drive 0.5 m forward to leave the row
+        if rospy.Time.now() - self.time_exit_row < rospy.Duration.from_sec(2):
             cmd_vel = Twist()
-            if not automatic_mode:
+            if not self.automatic_mode:
                 cmd_vel.linear.x = 0.0
                 cmd_vel.angular.z = 0.0
             else:
@@ -417,16 +400,18 @@ class MoveRobotPathPattern:
         which_turn = self.path_pattern[1]
         if which_turn == 'L':
             turn = self.turn_l
+            # the mid-row offset the robot has at the end of the row is used to correct the turning radius for exitin the row
             radius = self.row_width/2 + self.offset_valid + self.offset_radius
             y_min = 0.0
             y_max = 2
         elif which_turn == 'R':
             turn = self.turn_r
+            # the mid-row offset the robot has at the end of the row is used to correct the turning radius for exitin the row
             radius = -self.row_width/2 - self.offset_valid - self.offset_radius
             y_min = -2
             y_max = 0.0
 
-        if radius > 0.535:  # Maximal möglicher Radius
+        if radius > 0.535:  # the maximum radius is confined to this value
             radius = 0.535
 
         print("Radius", radius)
@@ -443,7 +428,6 @@ class MoveRobotPathPattern:
         # TODO:
         # angular velocity determined by linear velocity in rosparam or last cmd_vel.lin.x
         
-        #t = self.time_for_quater_turn           # [s]
         ang_vel = self.lin_vel_turn/radius    # [rad/s]
 
         # Check if the same row is to be entered again (-> 0)
@@ -462,12 +446,7 @@ class MoveRobotPathPattern:
             self.time_start = rospy.Time.now()
             # reset variable
             self.x_mean_old = 0.0
-            
-            #self.move_robot(pub_vel, self.lin_vel_turn, ang_vel)
-            #self.x_mean_old = self.x_mean
             return "state_headlands"
-            #return "state_turn_exit_row"
-            #return "state_finished"
         else:
             self.move_robot(pub_vel, self.lin_vel_turn, ang_vel)
             self.x_mean_old = self.x_mean
@@ -475,15 +454,14 @@ class MoveRobotPathPattern:
 
     def state_headlands(self, pub_vel):
         # TODO:
-        # take the linear velocity the robot has at the end of the turn
-        # increase width of laser_box_detect_row so that even shortened row ends will be detected
+        # - use the linear velocity the robot has at the end of the turn
+        # - increase width of laser_box_detect_row so that even shortened row ends will be detected
 
         # Extract scan points out of a rectangular box. This box is 
         # placed around the robot with itself lying in the center.
         # The scan points falling in this box are evaluated:
         # use the mean of x coordinates to control the robot to pass by
 
-        # self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
         # the robot has always to see an uneven number of rows
         x_min_drive_headland = -1.5*self.row_width
         x_max_drive_headland = 1.5*self.row_width
@@ -527,8 +505,6 @@ class MoveRobotPathPattern:
 
         # Count the scan points within the defined box and
         # identify whether a row is seen or the space in between.
-        # TODO:
-        # bestimme thresholds emprisch
         upper_thresh_scan_points = 10
         lower_thresh_scan_points = 5
         num_scan_dots = self.laser_box_detect_row.shape[1]
@@ -537,40 +513,39 @@ class MoveRobotPathPattern:
         print("row detection dots", num_scan_dots)
         print("there_is_row", there_is_row)
         print("there_is_no_row", there_is_no_row)
-        print("self.trans_row2norow", self.trans_row2norow)
-        print("self.trans_norow2row", self.trans_norow2row)
-
+        print("self.trans_row2gap", self.trans_row2gap)
+        print("self.trans_gap2row", self.trans_gap2row)
 
         # Count the transitions 
         # from seeing a row to seeing the space in between or 
         # from seeing the space in between to seeing a row.        
-        if (there_is_no_row and self.trans_row2norow) or self.there_was_no_row:
+        if (there_is_no_row and self.trans_row2gap) or self.there_was_no_row:
             self.there_was_no_row = True
             if there_is_row:
-                self.ctr_trans_norow2row += 1
-                print("no row -> row")
+                self.ctr_trans_gap2row += 1
+                print("gap -> row")
                 self.there_was_no_row = False
-                self.trans_norow2row = True
-                self.trans_row2norow = False
+                self.trans_gap2row = True
+                self.trans_row2gap = False
 
-        if (there_is_row and self.trans_norow2row) or self.there_was_row:
+        if (there_is_row and self.trans_gap2row) or self.there_was_row:
             self.there_was_row = True
             if there_is_no_row:
-                self.ctr_trans_row2norow += 1
-                print("row -> no row")
+                self.ctr_trans_row2gap += 1
+                print("row -> gap")
                 self.there_was_row = False
-                self.trans_norow2row = False
-                self.trans_row2norow = True
+                self.trans_gap2row = False
+                self.trans_row2gap = True
         
         # If the robot has go to e.g. the 3rd row on the left side,
         # the following transitions must be detected in order to
         # be able to turn into this row:
-        # row --> no row (this one is skipped)
-        # no row --> row
-        # row --> no row
-        # no row --> row
+        # row --> gap (this one is skipped)
+        # gap --> row
+        # row --> gap
+        # gap --> row
         # Thus, we have 2 * 3rd row - 3 = 3 transitions
-        sum_transitions = self.ctr_trans_row2norow + self.ctr_trans_norow2row
+        sum_transitions = self.ctr_trans_row2gap + self.ctr_trans_gap2row
         which_row = int(self.path_pattern[0])
         set_transitions = 2 * which_row - 3
 
@@ -578,10 +553,10 @@ class MoveRobotPathPattern:
         if target_row_reached:
             self.there_was_row = False
             self.there_was_no_row = False
-            self.trans_norow2row = False
-            self.trans_row2norow = True
-            self.ctr_trans_row2norow = 0
-            self.ctr_trans_norow2row = 0
+            self.trans_gap2row = False
+            self.trans_row2gap = True
+            self.ctr_trans_row2gap = 0
+            self.ctr_trans_gap2row = 0
             return "state_turn_enter_row"
         else:
             # The robot is passing by some rows.
@@ -599,24 +574,24 @@ class MoveRobotPathPattern:
             setpoint_orient = 0                                         # [x_mean]
             setpoint_offset = turn_sign*self.row_width                  # [m]
             error_orient= setpoint_orient - self.x_mean
-            if turn_sign >= 0: # left turn
+            # if left turn
+            if turn_sign >= 0:
                 error_offset = setpoint_offset - np.min(self.laser_box_drive_headland[1,:])
-            else: # right turn
+            # if right turn
+            else:
                 error_offset = setpoint_offset - np.max(self.laser_box_drive_headland[1,:])
 
             act_orient = turn_sign * self.p_gain_orient_headland*error_orient
             act_offset = -self.p_gain_offset_headland*error_offset          
 
-            # # TODO:
-            # # have a look at the exakt x_mean and set max_offset, make max_offset dependent on box width
             cmd_vel = Twist()
-            if not automatic_mode:
+            if not self.automatic_mode:
                 cmd_vel.linear.x = 0.0
                 cmd_vel.angular.z = 0.0
             else:
                 cmd_vel.linear.x = self.max_lin_vel_in_headland
                 print("miny", np.min(self.laser_box_drive_headland[1,:]),"error_offset",error_offset, "act_offset", act_offset)
-                alpha = 0.8
+                alpha = 0.6
                 cmd_vel.angular.z = alpha*act_offset + (1-alpha)*act_orient
             pub_vel.publish(cmd_vel)  
             return "state_headlands"
@@ -627,7 +602,6 @@ class MoveRobotPathPattern:
         # The scan points falling in this box are evaluated:
         # use the mean of y-coordinates to turn out of the row correctly
 
-        # self.xy_scan_raw = self.scan2cart_w_ign(self.scan_front, max_range=30.0)
         # the robot has always to see an uneven number of rows
         x_min = 0.0
         x_max = 1.0
@@ -650,9 +624,6 @@ class MoveRobotPathPattern:
         if radius > 0.535:  # Maximal möglicher Radius
             radius = 0.535
 
-        """ang_z = turn                            # [rad]
-        dist_x = (self.row_width/2 + self.offset_radius) * abs(ang_z)  # [m]
-        t = self.time_for_quater_turn           # [s]"""
         ang_vel = self.lin_vel_turn/radius   # [rad/s]
 
         # Check if the same row is to be entered again (-> 0)
@@ -671,11 +642,6 @@ class MoveRobotPathPattern:
         if y_close_to_zero and y_diff_thresh:
             # reset variable
             self.y_mean_old = 0.0
-
-            """self.move_robot(pub_vel, self.lin_vel_turn,ang_vel)
-            self.y_mean_old = self.y_mean
-            return "state_turn_enter_row"""
-
             return "state_crop_path_pattern"
         else:
             print("Raidus", radius)
@@ -690,7 +656,7 @@ class MoveRobotPathPattern:
 
     def state_idle(self, pub_vel):
         cmd_vel = Twist()
-        if not automatic_mode:
+        if not self.automatic_mode:
             cmd_vel.linear.x = 0.0
             cmd_vel.angular.z = 0.0
         else:
@@ -701,11 +667,15 @@ class MoveRobotPathPattern:
 
     def state_error(self):
         print("An error has occured and the robot is in safeguard stop.")
-        return "state_finished"
+        print("Please enter manual mode via Android App.")
+        if not self.automatic_mode:
+            return "state_in_row"
+        else:
+            return "state_error"
     
     def state_finished(self, pub_vel):
         cmd_vel = Twist()
-        if not automatic_mode:
+        if not self.automatic_mode:
             cmd_vel.linear.x = 0.0
             cmd_vel.angular.z = 0.0
         else:
