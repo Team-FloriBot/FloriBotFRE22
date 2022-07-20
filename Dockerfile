@@ -30,23 +30,14 @@ RUN curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sud
     ros-${ROS_DISTRO}-hector-gazebo-plugins && \
   rm -rf /var/lib/apt/lists/*   
 
-# Try to install packages
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCDE
-RUN add-apt-repository "deb https://librealsense.intel.com/Debian/apt-repo $(lsb_release -cs) main" -u
-RUN apt-get install -y librealsense2-dkms 
-RUN apt-get install -y librealsense2-utils 
-RUN apt-get install -y librealsense2-dev
-RUN  rm -rf /var/lib/apt/lists/*
 
 # Remove dependencies we don't need anymore.
 RUN apt-get -y remove curl
 
 # Copy the content of the src folder into the container in the folder '/catkin/src'. You can replace this by cloning your workspace from GIT
 # using 'RUN git clone https://github.com/my-robot-repository /catkin' if you like, but be sure to put the files in a folder named '/catkin'! 
-# COPY src /catkin/src
-RUN git clone https://github.com/Team-FloriBot/FloriBotFRE22.git /catkin
-RUN cd /catkin && git submodule init
-RUN cd /catkin && git submodule update
+COPY src /catkin/src
+# RUN git clone https://github.com/Euleeee/Floribot_Simulation.git /catkin
 
 # Install the dependencies of the repository that are listed in the packages.xml files.
 RUN apt-get update && \
@@ -64,11 +55,11 @@ RUN sed -i 's|^\(source .*\)|\1 \&\& source /catkin/devel/setup.bash|g' /ros_ent
 VOLUME ["/catkin/src/virtual_maize_field/map"]
 VOLUME ["/catkin/src/virtual_maize_field/launch"]
 
-# Setup the ROS master to communicate with the simulation container. 
-ENV ROS_MASTER_URI=http://simulation:11311
+# Setup the ROS master to communicate with the real robot container. 
+ENV ROS_MASTER_URI=http://192.168.0.42:11311
 
 # Launch your robot. The wait command ensures that this launch file waits for the simulation container to start the ROS server. Change
 # this line to start your own robot. The ${TASK_NUMBER} variable will be 1 during task 1, 2 during task 2 etc. You can use this 
 # variable set the robot task as is done below. Your launch file is responsible for spawning the robot description in the virual_maize_field
 # package.
-CMD  roslaunch floribot_simulation FloriBot_Docker1.launch --wait --screen; sleep 999999
+CMD  roslaunch path_planning freestyle_docker.launch --wait --screen; sleep 999999
