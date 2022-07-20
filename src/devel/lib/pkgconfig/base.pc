@@ -1,0 +1,8 @@
+prefix=/home/user/hupf_catkin_ws/devel
+
+Name: base
+Description: Description of base
+Version: 0.0.0
+Cflags: -I/home/user/hupf_catkin_ws/devel/include -I/home/user/hupf_catkin_ws/src/base/include
+Libs: -L${prefix}/lib 
+Requires: geometry_msgs roscpp rospy std_msgs nav_msgs message_runtime

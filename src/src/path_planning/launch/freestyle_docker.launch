@@ -1,0 +1,6 @@
+<?xml version='1.0'?>
+<launch>
+ 
+<include file="$(find path_planning)/launch/move_robot_path_pattern.launch"></include>
+  
+</launch>
