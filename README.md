@@ -89,7 +89,7 @@ Für die Docker Umgebung kann sich an den FRE Repo's orientiert werden. Um ein D
 
     docker build . -t robot_workspace
 
-Neben dem Roboterimage muss noch ein Simulationsimage erstellt werden, welches mit dem Competition Enviornment verkünpft ist. Dazu muss zuerst das Git Repository des Competion Enviornments geklont werden.
+Neben dem Roboterimage muss noch ein Simulationsimage erstellt werden, welches mit dem Competition Enviornment verkünpft ist. Dazu muss zuerst das Git Repository des Competion Enviornments geklont werden. Das Repo kann man zum Beispiel in das Home Verzeichnis klonen.
 
     git clone https://github.com/FieldRobotEvent/competition_environment.git
     
@@ -109,7 +109,7 @@ eingeben. Damit wird der ROS Master auf eine andere Andresse gelegt. Nun können
 
     docker-compose down
     
-benutzen, um die Simulation vollständig zu beenden. 
+benutzen, um die Simulation vollständig zu beenden. Damit die Simulation schneller läuft, kann das Docker Image mit CUDA verknüpft. Jedoch benötigt man dafür eine Grafikkarte von Nvidia. Ist das der Fall, gibt es hier: https://github.com/FieldRobotEvent/competition_environment/blob/main/doc/use_gpu_in_docker.md eine Anleitung, wie man die Simulation in der Wettbewerbsumgebung beschleunigen kann. 
 
 # Aktualisieren der Docker Umgebung
 Um den Docker Simulationscontainer zu aktualisieren fogledenn Befehl ausführen: 
