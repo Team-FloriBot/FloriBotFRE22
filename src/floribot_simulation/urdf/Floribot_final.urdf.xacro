@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="Floribot">
 
-<!-- Wagenparameter -->
-<xacro:property name="height_wagen" value="0.363" />
-<xacro:property name="width_wagen" value="0.213" />
-<xacro:property name="len_wagen_vorne" value="0.635" />
-<xacro:property name="len_wagen_hinten" value="0.605" />
+<!-- wagon parameter -->
+<xacro:property name="height_wagon" value="0.363" />
+<xacro:property name="width_wagon" value="0.213" />
+<xacro:property name="length_wagon_front" value="0.635" />
+<xacro:property name="length_wagon_rear" value="0.605" />
 
-<!-- Ghost Elements -->
+<!-- ghost elements -->
 <xacro:property name="ghost_size" value="0.01" />
-<xacro:property name="base2Vorderwagen" value="0.04" />
-<xacro:property name="Hinterwagenghost2Hinterwagen" value="0.025" />
+<xacro:property name="base_2_front_wagon" value="0.04" />
+<xacro:property name="rear_wagon_ghost_2_rear_wagon" value="0.025" />
 
-<!-- Reifenparameter -->
+<!-- wheel parameter -->
 <xacro:property name="wheel_radius" value="0.140" />
 <xacro:property name="wheel_thickness" value="0.09" />
 <xacro:property name="x_joint_wheel_front" value="0" />
@@ -20,61 +20,62 @@
 <xacro:property name="x_joint_wheel_back" value="0" />
 <xacro:property name="y_joint_wheel_back" value="0.167" />
 
-<!-- Laserparameter -->
+<!-- laser parameter -->
 <xacro:property name="x_laser_front" value="0.3315" />
 <xacro:property name="x_laser_back" value="-0.33" />
 <xacro:property name="laser_height" value="0.03" />
 
-<!-- Kameraparameter -->
+<!-- camera parameter -->
 <xacro:property name="x_camera_front" value="0.3133" />
 <xacro:property name="x_camera_back" value="-0.338" />
 <xacro:property name="camera_height" value="0.263" />
 <xacro:property name="camera_angle" value="0.6" />
 
 
-<!--Verbindungsgelenkparameter (Skizze: |Vorderwagen|I==|Hinterwagen| -> I: Vertikaler Teil, ==: Horizontaler Teil) -->
+<!--articulated joint parameter -->
 <xacro:property name="radius" value="0.008" />
-<xacro:property name="vertikal_length" value="0.06" />
+<xacro:property name="vertical_length" value="0.06" />
 <xacro:property name="horizontal_length" value="0.055" />
-<xacro:property name="WheelJoint2MidJoint" value="0.383" />
-<xacro:property name="JointHeight" value="0.015" />
+<xacro:property name="wheel_joint_2_mid_joint" value="0.383" />
+<xacro:property name="joint_height" value="0.015" />
 
-<!-- Hinzufuegen des Laserscanners -->
+<!-- add laserscanners -->
 <xacro:include filename="$(find sick_scan)/urdf/sick_scan.urdf.xacro" />
 <xacro:include filename="$(find realsense2_description)/urdf/_d435i.urdf.xacro" />
 
-<!-- Makro fuer Wheel Tranmission -->
-<xacro:macro name="wheelTransGaz" params="position">
+<!-- macro wheel tranmission -->
+<xacro:macro name="wheel_transmission" params="position">
+
   <transmission name="joint_${position}_trans">
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="joint_${position}">
-          <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
-        </joint>
-        <actuator name="joint_${position}_motor">
-          <hardwareInterface>hardware_interface/VelocityActuatorInterface</hardwareInterface>
-          <mechanicalReduction>1</mechanicalReduction>
-        </actuator>
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="joint_${position}">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="joint_${position}_motor">
+      <hardwareInterface>hardware_interface/VelocityActuatorInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
   </transmission>
 
-  <!-- hardware_interface/VelocityJointInterface -->
-
+  <!-- friction and damping coefficents for gazebo simulation -->
   <gazebo reference="${position}">
     <mu1 value="0.5"/>
     <mu2 value="0.5"/>
     <kp value="10000000.0" />
     <kd value="1.0" />
     <fdir1 value="1 0 0"/>
-    
   </gazebo> 
 
 </xacro:macro>
 
-<xacro:macro name = "wheelColor" params = "linkName">
+<!-- macro wheel color for gazbeo -->
+<xacro:macro name = "wheel_color" params = "linkName">
   <gazebo reference="${linkName}">
     <material>Gazebo/FlatBlack</material>
   </gazebo>
 </xacro:macro>
 
+<!-- macro grey color for gazbeo -->
 <xacro:macro name= "darkGreyColor" params = "linkName">
   <gazebo reference="${linkName}">
     <material>Gazebo/DarkGrey</material>
@@ -82,520 +83,555 @@
 </xacro:macro>
 
 
-  <!-- Base Link -->
-  <link name="base_link">
-      <visual>
-    	  <origin xyz="0 0 ${wheel_radius + ghost_size}" rpy="0 0 0"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <box size="${ghost_size} ${ghost_size} ${ghost_size}"/>
-          </geometry>
-          <material name="c">
-              <color rgba="0 0.9 0.9 1.0"/>
-          </material>
-      </visual>
-  </link>
+<!-- base link -->
+<link name="base_link">
+  <visual>
+    <origin xyz="0 0 ${wheel_radius + ghost_size}" rpy="0 0 0"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+        <box size="${ghost_size} ${ghost_size} ${ghost_size}"/>
+    </geometry>
+    <material name="c">
+        <color rgba="0 0.9 0.9 1.0"/>
+    </material>
+  </visual>
+</link>
 
-   <!-- Gelenk zwischen Vorderwagen und base_link -->
-  <joint name="base_zu_Vorderwagen" type="fixed">
-       <parent link="base_link"/>
-       <child link="Vorderwagen"/>
-	   <origin xyz="${-base2Vorderwagen} 0 0"/>
-  </joint>
-  
-  <!-- Vorderwagen -->
-  <link name="Vorderwagen">
-      <visual>
-    	  <origin xyz="-${len_wagen_vorne/2+0.0255} 0 -${wheel_radius}" rpy="0 0 0"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <!-- <box size="${len_wagen_vorne} ${width_wagen} ${height_wagen}"/> -->
-              <mesh filename="package://floribot_simulation/meshes/Vorderwagen.stl" scale="0.001 0.001 0.001" />
-          </geometry>
-          <material name="c">
-              <color rgba="0 0.9 0.9 1.0"/>
-          </material>
-      </visual>
-      <collision>
-        <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
-		    <geometry>
-              <box size="${len_wagen_vorne} ${width_wagen} ${height_wagen}"/>
-            </geometry>
-	  </collision>
-	  <inertial>
+  <!-- joint between front wagon and base_link -->
+<joint name="j_base_2_front_wagon" type="fixed">
+  <parent link="base_link"/>
+  <child link="front_wagon"/>
+  <origin xyz="${-base_2_front_wagon} 0 0"/>
+</joint>
+
+<!-- front wagon -->
+<link name="front_wagon">
+  <visual>
+    <origin xyz="-${length_wagon_front/2+0.0255} 0 -${wheel_radius}" rpy="0 0 0"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <mesh filename="package://floribot_simulation/meshes/Vorderwagen.stl" scale="0.001 0.001 0.001" />
+    </geometry>
+    <material name="c">
+      <color rgba="0 0.9 0.9 1.0"/>
+    </material>
+  </visual>
+
+  <collision>
     <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
-		<mass value="31"/>
-        <inertia ixx="0.3853" ixy="0.0001197" ixz="-0.0128" iyy="1.0" iyz="0.0000149" izz="0.8678"/>
-      </inertial>
-  </link>
+    <geometry>
+      <box size="${length_wagon_front} ${width_wagon} ${height_wagon}"/>
+    </geometry>
+  </collision>
 
-  <gazebo reference="Vorderwagen">
-      <material>Gazebo/Grey</material>
-  </gazebo>
+  <inertial>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+    <mass value="31"/>
+    <inertia ixx="0.3853" ixy="0.0001197" ixz="-0.0128" iyy="1.0" iyz="0.0000149" izz="0.8678"/>
+  </inertial>
+</link>
 
-  <!-- Kamera vorne-->
-  <xacro:sensor_d435i name="front_camera" parent="base_link">
-    <origin xyz="${x_camera_front} 0 ${camera_height}" rpy="0 ${camera_angle} 0"/>
-  </xacro:sensor_d435i>
+<!-- gazebo color front wagon -->
+<gazebo reference="front_wagon">
+  <material>Gazebo/Grey</material>
+</gazebo>
 
-  <link name="CameraFrontPositiv">
-      <visual>
-    	  <origin xyz="${len_wagen_vorne/2-0.06} -0.0225 ${height_wagen*2/3+0.033}" rpy="0 1.57 0"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_positiv.stl" scale="0.001 0.001 0.001" />
-          </geometry>
-          <material name="c">
-              <color rgba="0 0.9 0.9 1.0"/>
-          </material>
-      </visual>
-	  <inertial>
-		<mass value="0.1"/>
-        <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
-      </inertial>
-  </link>
-  
-  <xacro:darkGreyColor linkName = "CameraFrontPositiv" />
+<!-- front camera -->
+<xacro:sensor_d435i name="front_camera" parent="base_link">
+  <origin xyz="${x_camera_front} 0 ${camera_height}" rpy="0 ${camera_angle} 0"/>
+</xacro:sensor_d435i>
 
-  <joint name="jointCameraFrontPositiv" type="fixed">
-       <parent link="base_link"/>
-       <child link="CameraFrontPositiv"/>
-	   <origin xyz="0 0 0" rpy="0 0 0"/>
-  </joint>
+<!-- front camera positiv link -->
+<link name="camera_front_positiv">
+  <visual>
+    <origin xyz="${length_wagon_front/2-0.06} -0.0225 ${height_wagon*2/3+0.033}" rpy="0 1.57 0"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_positiv.stl" scale="0.001 0.001 0.001" />
+    </geometry>
+    <material name="c">
+      <color rgba="0 0.9 0.9 1.0"/>
+    </material>
+  </visual>
 
-  <link name="CameraFrontNegativ">
-      <visual>
-    	  <origin xyz="${len_wagen_vorne/2-0.0028} -0.006 ${height_wagen*2/3+0.0355}" rpy="${-camera_angle-1.57} 0 -1.57"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <!-- <box size="${len_wagen_vorne} ${width_wagen} ${height_wagen}"/> -->
-              <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_negativ.stl" scale="0.001 0.001 0.001" />
-          </geometry>
-          <material name="c">
-              <color rgba="0 0.9 0.9 1.0"/>
-          </material>
-      </visual>
-	  <inertial>
-		<mass value="0.1"/>
-        <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
-      </inertial>
-  </link>
+  <inertial>
+    <mass value="0.1"/>
+    <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+  </inertial>
+</link>
 
-  <xacro:darkGreyColor linkName = "CameraFrontNegativ" />
+<!-- gazebo camera link color -->
+<xacro:darkGreyColor linkName = "camera_front_positiv" />
 
-  <joint name="jointCameraFrontNegativ" type="fixed">
-      <parent link="CameraFrontPositiv"/>
-       <child link="CameraFrontNegativ"/>
-	   <origin xyz="0 0 0" rpy="0 0 0"/>
-  </joint>
+<!-- joint between camera front positiv and base link -->
+<joint name="j_camera_front_positiv" type="fixed">
+  <parent link="base_link"/>
+  <child link="camera_front_positiv"/>
+  <origin xyz="0 0 0" rpy="0 0 0"/>
+</joint>
 
-  <!-- Laserscanner vorne -->
-  <joint name="joint_front_laser" type="fixed">
+<!-- front camera negativ link -->
+<link name="camera_front_negativ">
+  <visual>
+   <origin xyz="${length_wagon_front/2-0.0028} -0.006 ${height_wagon*2/3+0.0355}" rpy="${-camera_angle-1.57} 0 -1.57"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_negativ.stl" scale="0.001 0.001 0.001" />
+    </geometry>
+    <material name="c">
+      <color rgba="0 0.9 0.9 1.0"/>
+    </material>
+  </visual>
+
+  <inertial>
+    <mass value="0.1"/>
+    <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+  </inertial>
+</link>
+
+<!-- gazebo camera link color -->
+<xacro:darkGreyColor linkName = "camera_front_negativ" />
+
+<!-- joint between camera front positiv and negativ -->
+<joint name="j_camera_front_negativ" type="fixed">
+  <parent link="camera_front_positiv"/>
+  <child link="camera_front_negativ"/>
+  <origin xyz="0 0 0" rpy="0 0 0"/>
+</joint>
+
+<!-- joint laserscanner front  -->
+<joint name="joint_front_laser" type="fixed">
+  <parent link="base_link"/>
+  <child link="front_laser_mount_link"/>
+  <origin xyz="${x_laser_front} 0 ${laser_height}" rpy="3.14 0 0"/>
+</joint>
+
+<!-- link laserscanner front -->
+<xacro:sick_tim_5xx name="front_laser" ros_topic="laser_scanner_front"/>
+
+<!-- distance box laserscanner front -->
+<link name="laser_front_box">
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <box size="0.022 0.05 0.05"/> -->
+    </geometry>
+  </visual>
+
+  <inertial>
+    <mass value="0.1"/>
+    <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+  </inertial>
+</link>
+
+<!-- gazebo color scanner box -->
+<xacro:darkGreyColor linkName = "laser_front_box" />
+
+<!-- joint between laserscanner box and base link-->
+<joint name="j_laser_box" type="fixed">
     <parent link="base_link"/>
-    <child link="front_laser_mount_link"/>
-	  <origin xyz="${x_laser_front} 0 ${laser_height}" rpy="3.14 0 0"/>
+    <child link="laser_front_box"/>
+    <origin xyz="${length_wagon_front/2-base_2_front_wagon+0.011} 0 -0.005" rpy="0 0 0"/>
+</joint>
+
+<!-- joint between base link and first part of the articulated joint (body_angle) -->
+<joint name="body_angle" type="revolute">
+    <axis xyz="0 0 1"/>
+    <limit effort="1.0" lower="-1.57" upper="1.57" velocity="0.5"/>
+    <parent link="base_link"/>
+    <child link="connection_part_1"/>
+    <origin xyz="${-wheel_joint_2_mid_joint} 0 -${joint_height}"/>
+</joint>
+
+<!-- transmisson for body angle -> this is required to present this joint in floribot/joint_states -->
+<transmission name="body_angle_trans">
+  <type>transmission_interface/SimpleTransmission</type>
+  <joint name="body_angle">
+    <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
   </joint>
-  
-  <xacro:sick_tim_5xx name="front_laser" ros_topic="laser_scanner_front"/>
+  <actuator name="body_angle_motor">
+    <mechanicalReduction>1</mechanicalReduction>
+  </actuator>
+</transmission>
 
-  <link name="laser_front_box">
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <axis xyz="0 0 0"/>
-        <geometry>
-            <box size="0.022 0.05 0.05"/> -->
-        </geometry>
-    </visual>
-	  <inertial>
-		  <mass value="0.1"/>
-      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
-    </inertial>
-  </link>
+<!-- connection part 1 of the articulated joint (vertical one) -->   
+<link name="connection_part_1">
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <cylinder length="${vertical_length}" radius="${radius}"/>
+    </geometry>
+    <material name="r">
+      <color rgba="0.9 0 0 1.0"/>
+    </material>
+  </visual>
 
-  <xacro:darkGreyColor linkName = "laser_front_box" />
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <cylinder length="${vertical_length}" radius="${radius}"/>
+    </geometry>
+  </collision>
 
-  <joint name="joint_laser_box" type="fixed">
-     <parent link="base_link"/>
-     <child link="laser_front_box"/>
-     <origin xyz="${len_wagen_vorne/2-base2Vorderwagen+0.011} 0 -0.005" rpy="0 0 0"/>
-  </joint>
+  <inertial>
+    <mass value="0.01"/>
+    <inertia ixx="0.000004" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.000004"/>
+  </inertial>
+</link>
 
- <!-- Gelenk zwischen Vorderwagen und Verbindungsstueck -->
-  <joint name="body_angle" type="revolute">
-       <axis xyz="0 0 1"/>
-       <limit effort="1.0" lower="-1.57" upper="1.57" velocity="0.5"/>
-       <parent link="base_link"/>
-       <child link="Gelenkteil_1"/>
-	   <origin xyz="${-WheelJoint2MidJoint} 0 -${JointHeight}"/>
-  </joint>
-  
- <transmission name="body_angle_trans">
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="body_angle">
-          <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
-        </joint>
-        <actuator name="body_angle_motor">
-          <mechanicalReduction>1</mechanicalReduction>
-        </actuator>
-  </transmission>
+<!-- gazebo color -->
+<xacro:darkGreyColor linkName = "connection_part_1" />
 
-
- <!-- Verbindungsstueck 1 -->   
-   <link name="Gelenkteil_1">
-      <visual>
-    	  <origin xyz="0 0 0" rpy="0 0 0"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <cylinder length="${vertikal_length}" radius="${radius}"/>
-          </geometry>
-          <material name="r">
-              <color rgba="0.9 0 0 1.0"/>
-          </material>
-      </visual>
-	  <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-		    <geometry>
-              <cylinder length="${vertikal_length}" radius="${radius}"/>
-            </geometry>
-	  </collision>
-	  <inertial>
-		<mass value="0.01"/>
-        <inertia ixx="0.000004" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.000004"/>
-      </inertial>
-  </link>
-
-  <xacro:darkGreyColor linkName = "Gelenkteil_1" />
-
- <!-- Gelenk zwischen den beiden Verbindungsstuecken -->
-  <joint name="Gelenk" type="revolute">
+<!-- revolute joint between both connection parts for the articulated joint -->
+<joint name="j_revolute_front_rear" type="revolute">
   <axis xyz="1 0 0"/>
-       <limit effort="1.0" lower="-1.57" upper="1.57" velocity="0.5"/>-
-       <parent link="Gelenkteil_1"/>
-       <child link="Gelenkteil_2"/>
-	   <origin xyz="${-horizontal_length/2 - radius} 0 0"/>
-  </joint>
+  <limit effort="1.0" lower="-1.57" upper="1.57" velocity="0.5"/>-
+  <parent link="connection_part_1"/>
+  <child link="connection_part_2"/>
+  <origin xyz="${-horizontal_length/2 - radius} 0 0"/>
+</joint>
 
- <!-- Verbindungsstueck 2 -->
-  <link name="Gelenkteil_2">
-      <visual>
-    	  <origin xyz="0 0 0" rpy="0 1.57 0"/>
-        <axis xyz="0 0 0.025"/>
-          <geometry>
-              <cylinder length="${horizontal_length}" radius="${radius}"/>
-          </geometry>
-          <material name="r">
-              <color rgba="0.9 0 0 1.0"/>
-          </material>
-      </visual>
-	  <collision>
-      <origin xyz="0 0 0" rpy="0 1.57 0"/>
-      <geometry>
-        <cylinder length="${horizontal_length}" radius="${radius}"/>
-      </geometry>
-	  </collision>
-	  <inertial>
-		<mass value="0.01"/>
-        <inertia ixx="0.000004" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.000004"/>
-      </inertial>
-  </link>
+<!-- connection part 2 -->
+<link name="connection_part_2">
+  <visual>
+    <origin xyz="0 0 0" rpy="0 1.57 0"/>
+    <axis xyz="0 0 0.025"/>
+    <geometry>
+      <cylinder length="${horizontal_length}" radius="${radius}"/>
+    </geometry>
+    <material name="r">
+      <color rgba="0.9 0 0 1.0"/>
+    </material>
+  </visual>
 
-  <xacro:darkGreyColor linkName = "Gelenkteil_2" />
+  <collision>
+    <origin xyz="0 0 0" rpy="0 1.57 0"/>
+    <geometry>
+      <cylinder length="${horizontal_length}" radius="${radius}"/>
+    </geometry>
+  </collision>
 
- <!-- Gelenk zwischen Verbindungsstueck 2 und Hinterwagen -->
-  <joint name="Gelenkteil_2_zu_Hinterwagen" type="fixed">
-       <parent link="Gelenkteil_2"/>
-       <child link="Hinterwagen_ghost"/>
-	   <origin xyz="${-WheelJoint2MidJoint + vertikal_length/2} 0 ${JointHeight}"/>
-  </joint>
+  <inertial>
+    <mass value="0.01"/>
+    <inertia ixx="0.000004" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.000004"/>
+  </inertial>
+</link>
 
-  <!-- Hinterwagen ghost -->
-  <link name="Hinterwagen_ghost">
-      <visual>
-    	  <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <box size="${ghost_size} ${ghost_size} ${ghost_size}"/>
-          </geometry>
-          <material name="b">
-              <color rgba="0 0 0.9 1.0"/>
-          </material>
-      </visual>
-      <collision>
-      <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
-		    <geometry>
-              <box size="${ghost_size} ${ghost_size} ${ghost_size}"/>
-            </geometry>
-	  </collision>
-	  <inertial>
+<!-- gazebo color -->
+<xacro:darkGreyColor linkName = "connection_part_2" />
+
+<!-- joint between connection part 2 and rear wagon ghost -->
+<joint name="j_connection_part_2_rear_wagon" type="fixed">
+  <parent link="connection_part_2"/>
+  <child link="rear_wagon_ghost"/>
+  <origin xyz="${-wheel_joint_2_mid_joint + vertical_length/2} 0 ${joint_height}"/>
+</joint>
+
+<!-- rear wagon ghost -->
+<link name="rear_wagon_ghost">
+  <visual>
     <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
-		<mass value="0.001"/>
-        <inertia ixx="1.369982" ixy="0.0" ixz="0.0" iyy="0.487502" iyz="0.0" izz="1.132200"/>
-      </inertial>
-  </link>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <box size="${ghost_size} ${ghost_size} ${ghost_size}"/>
+    </geometry>
+    <material name="b">
+      <color rgba="0 0 0.9 1.0"/>
+    </material>
+  </visual>
 
-  <!-- Gelenk zwischen Ghost und Hinterwagen -->
-  <joint name="Hinterwagen_ghost_zu_Hinterwagen" type="fixed">
-       <parent link="Hinterwagen_ghost"/>
-       <child link="Hinterwagen"/>
-	   <origin xyz="${Hinterwagenghost2Hinterwagen} 0 0"/>
-  </joint>
-
- <!-- Hinterwagen -->
-  <link name="Hinterwagen">
-      <visual>
-    	  <origin xyz="${len_wagen_hinten/2+0.056} 0 -${wheel_radius}" rpy="0 0 0"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <!--<box size="${len_wagen_hinten} ${width_wagen} ${height_wagen}"/>-->
-              <mesh filename="package://floribot_simulation/meshes/Hinterwagen.stl" scale="0.001 0.001 0.001" />
-          </geometry>
-          <material name="b">
-              <color rgba="0 0 0.9 1.0"/>
-          </material>
-      </visual>
-	  <collision>
-      <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
-		    <geometry>
-              <box size="${len_wagen_hinten} ${width_wagen} ${height_wagen}"/>
-            </geometry>
-	  </collision>
-	  <inertial>
+  <collision>
     <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
-		<mass value="33"/>
-        <inertia ixx="0.4137" ixy="0.00027" ixz="0.007359" iyy="1.047" iyz="0.0001775" izz="0.9021"/>
-      </inertial>
-  </link>
+    <geometry>
+      <box size="${ghost_size} ${ghost_size} ${ghost_size}"/>
+    </geometry>
+  </collision>
 
-  <gazebo reference="Hinterwagen">
-      <material>Gazebo/Grey</material>
-  </gazebo>
+  <inertial>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+    <mass value="0.001"/>
+    <inertia ixx="1.369982" ixy="0.0" ixz="0.0" iyy="0.487502" iyz="0.0" izz="1.132200"/>
+  </inertial>
+</link>
 
-  <!-- Kamera hinten-->
-  <xacro:sensor_d435i name="rear_camera" parent="Hinterwagen">
-    <origin xyz="${x_camera_back} 0 ${camera_height}" rpy="0 ${camera_angle} 3.14"/>
-  </xacro:sensor_d435i>
+<!-- joint between rear wagon ghost and rear wagon link -->
+<joint name="j_rear_wagon_ghost_2_rear_wagon" type="fixed">
+  <parent link="rear_wagon_ghost"/>
+  <child link="rear_wagon"/>
+  <origin xyz="${rear_wagon_ghost_2_rear_wagon} 0 0"/>
+</joint>
 
-  <link name="CameraRearPositiv">
-      <visual>
-    	  <origin xyz="${-len_wagen_hinten/2+0.021} +0.0225 ${height_wagen*2/3+0.033}" rpy="0 1.57 3.141"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <!-- <box size="${len_wagen_vorne} ${width_wagen} ${height_wagen}"/> -->
-              <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_positiv.stl" scale="0.001 0.001 0.001" />
-          </geometry>
-          <material name="c">
-              <color rgba="0 0.9 0.9 1.0"/>
-          </material>
-      </visual>
-	  <inertial>
-		<mass value="0.1"/>
-        <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
-      </inertial>
-  </link>
+<!-- rear wagon link -->
+<link name="rear_wagon">
+  <visual>
+    <origin xyz="${length_wagon_rear/2+0.056} 0 -${wheel_radius}" rpy="0 0 0"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <mesh filename="package://floribot_simulation/meshes/Hinterwagen.stl" scale="0.001 0.001 0.001" />
+    </geometry>
+    <material name="b">
+      <color rgba="0 0 0.9 1.0"/>
+    </material>
+  </visual>
 
-  <xacro:darkGreyColor linkName = "CameraRearPositiv" />
+  <collision>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+    <geometry>
+      <box size="${length_wagon_rear} ${width_wagon} ${height_wagon}"/>
+    </geometry>
+  </collision>
 
-  <joint name="jointCameraRearPositiv" type="fixed">
-       <parent link="Hinterwagen"/>
-       <child link="CameraRearPositiv"/>
-	   <origin xyz="0 0 0" rpy="0 0 0"/>
-  </joint>
-
-  <link name="CameraRearNegativ">
-      <visual>
-    	  <origin xyz="${-len_wagen_hinten/2-0.036} +0.006 ${height_wagen*2/3+0.0345}" rpy="${-camera_angle-1.57} 0 1.57"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <!-- <box size="${len_wagen_vorne} ${width_wagen} ${height_wagen}"/> -->
-              <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_negativ.stl" scale="0.001 0.001 0.001" />
-          </geometry>
-          <material name="c">
-              <color rgba="0 0.9 0.9 1.0"/>
-          </material>
-      </visual>
-	  <inertial>
-		<mass value="0.1"/>
-        <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
-      </inertial>
-  </link>
-
-  <xacro:darkGreyColor linkName = "CameraRearNegativ" />
-
-  <joint name="jointCameraRearNegativ" type="fixed">
-       <parent link="CameraRearPositiv"/>
-       <child link="CameraRearNegativ"/>
-	   <origin xyz="0 0 0" rpy="0 0 0"/>
-  </joint>
-
-  
-  <!-- Laserscanner hinten -->
-  <joint name="joint_rear_laser" type="fixed">
-       <parent link="Hinterwagen"/>
-       <child link="rear_laser_mount_link"/>
-	   <origin xyz="${x_laser_back} 0 ${laser_height}" rpy="3.14 0 3.14"/>
-  </joint>
-  
-  <xacro:sick_tim_5xx name="rear_laser" ros_topic="laser_scanner_rear"/>
-
- <!-- Gelenk zwischen Vorderwagen und Rad VL-->
-  <joint name="joint_frontLeft" type="continuous">
-       <parent link="base_link"/>
-       <child link="frontLeft"/>
-       <axis xyz="0 1 0"/>
-       <origin xyz="${x_joint_wheel_front} ${y_joint_wheel_front} 0"/>
-        <limit effort="100.0" velocity="14.2857" />
-  </joint>
-
-<!-- Transmission -->
-  <xacro:wheelTransGaz position="frontLeft" />
-
- <!-- Rad VL -->
-  <link name="frontLeft">
-      <visual>
-    	  <origin xyz="0 -${wheel_thickness/2-0.0095} 0" rpy="1.57 0 0"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <!-- <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>-->
-              <mesh filename="package://floribot_simulation/meshes/Reifen.stl" scale="0.001 0.001 0.001" />
-          </geometry>
-          <material name="r">
-              <color rgba="0.9 0 0 1.0"/>
-          </material>
-      </visual>
-	  <collision>
-    <origin xyz="0 0 0" rpy="1.57 0 0"/>
-		    <geometry>
-              <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
-            </geometry>
-	  </collision>
-	  <inertial>
-		<mass value="2.4"/>
-        <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
-      </inertial>
-  </link>
-
- <!-- Gelenk zwischen Vorderwagen und Rad VR -->
-  <joint name="joint_frontRight" type="continuous">
-       <parent link="base_link"/>
-       <child link="frontRight"/>
-       <axis xyz="0 1 0"/>
-       <origin xyz="${x_joint_wheel_front} -${y_joint_wheel_front} 0"/>
-       <limit effort="100.0" velocity="14.2857" />
-  </joint>
-
-<!-- Transmission -->
-  <xacro:wheelTransGaz position="frontRight" />
-
-<!-- Rad VR -->
-  <link name="frontRight">
-      <visual>
-    	  <origin xyz="0 -${wheel_thickness/2 - 0.0105} 0" rpy="1.57 0 0"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <!-- <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/> -->
-              <mesh filename="package://floribot_simulation/meshes/Reifen.stl" scale="0.001 0.001 0.001" />
-          </geometry>
-          <material name="r">
-              <color rgba="0.9 0 0 1.0"/>
-          </material>
-      </visual>
-	  <collision>
-      <origin xyz="0 0 0" rpy="1.57 0 0"/>
-		    <geometry>
-              <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
-            </geometry>
-	  </collision>
-	  <inertial>
-		<mass value="2.4"/>
-        <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
-      </inertial>
-  </link>
-
-<!-- Gelenk zwischen Hinterwagen und Rad HR -->
-  <joint name="joint_rearRight" type="continuous">
-       <parent link="Hinterwagen_ghost"/>
-       <child link="rearRight"/>
-       <axis xyz="0 1 0"/>
-       <origin xyz="${x_joint_wheel_back} -${y_joint_wheel_back} 0"/>
-       <limit effort="100.0" velocity="14.2857" />
-  </joint>
-
-<!-- Transmission -->
-  <xacro:wheelTransGaz position="rearRight" />
-
-<!-- Rad HR -->
-  <link name="rearRight">
-      <visual>
-    	  <origin xyz="0 -${wheel_thickness/2 - 0.0105} 0" rpy="1.57 0 0"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <!-- <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/> -->
-              <mesh filename="package://floribot_simulation/meshes/Reifen.stl" scale="0.001 0.001 0.001" />
-          </geometry>
-          <material name="r">
-              <color rgba="0.9 0 0 1.0"/>
-          </material>
-      </visual>
-	  <collision>
-      <origin xyz="0 0 0" rpy="1.57 0 0"/>
-		    <geometry>
-              <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
-            </geometry>
-	  </collision>
-	  <inertial>
-		<mass value="2.4"/>
-        <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
+  <inertial>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+    <mass value="33"/>
+    <inertia ixx="0.4137" ixy="0.00027" ixz="0.007359" iyy="1.047" iyz="0.0001775" izz="0.9021"/>
     </inertial>
-  </link>
+</link>
 
-<!-- Gelenk zwischen Hinterwagen und Rad HL -->
-  <joint name="joint_rearLeft" type="continuous">
-       <parent link="Hinterwagen_ghost"/>
-       <child link="rearLeft"/>
-       <axis xyz="0 1 0"/>
-       <origin xyz="${x_joint_wheel_back} ${y_joint_wheel_back} 0"/>
-       <limit effort="100.0" velocity="14.2857" />
-  </joint>
+<!-- color rear wagon -->
+<gazebo reference="rear_wagon">
+    <material>Gazebo/Grey</material>
+</gazebo>
 
-<!-- Transmission -->
-  <xacro:wheelTransGaz position="rearLeft" />
+<!-- rear camera -->
+<xacro:sensor_d435i name="rear_camera" parent="rear_wagon">
+  <origin xyz="${x_camera_back} 0 ${camera_height}" rpy="0 ${camera_angle} 3.14"/>
+</xacro:sensor_d435i>
 
-<!-- Rad HL -->
-  <link name="rearLeft">
-      <visual>
-    	  <origin xyz="0 -${wheel_thickness/2-0.0095}  0" rpy="1.57 0 0"/>
-        <axis xyz="0 0 0"/>
-          <geometry>
-              <!-- <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/> -->
-              <mesh filename="package://floribot_simulation/meshes/Reifen.stl" scale="0.001 0.001 0.001" />
-          </geometry>
-          <material name="r">
-              <color rgba="0.9 0 0 1.0"/>
-          </material>
-      </visual>
-	  <collision>
-      <origin xyz="0 0 0" rpy="1.57 0 0"/>
-		    <geometry>
-              <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
-            </geometry>
-	  </collision>
-	  <inertial>
-		<mass value="2.4"/>
-        <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
-      </inertial>
-  </link>
+<!-- rear carmera positiv link -->
+<link name="camera_rear_positiv">
+  <visual>
+    <origin xyz="${-length_wagon_rear/2+0.021} +0.0225 ${height_wagon*2/3+0.033}" rpy="0 1.57 3.141"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_positiv.stl" scale="0.001 0.001 0.001" />
+    </geometry>
+    <material name="c">
+      <color rgba="0 0.9 0.9 1.0"/>
+    </material>
+  </visual>
 
-  <!-- Wheel Colors-->
-  <xacro:wheelColor linkName="frontLeft" />
-  <xacro:wheelColor linkName="frontRight" />
-  <xacro:wheelColor linkName="rearLeft" />
-  <xacro:wheelColor linkName="rearRight" />
+  <inertial>
+    <mass value="0.1"/>
+    <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+  </inertial>
+</link>
+
+<!-- gazebo color -->
+<xacro:darkGreyColor linkName = "camera_rear_positiv" />
+
+<!-- joint between rear camera positiv and rear wagon -->
+<joint name="j_camera_rear_positiv" type="fixed">
+  <parent link="rear_wagon"/>
+  <child link="camera_rear_positiv"/>
+  <origin xyz="0 0 0" rpy="0 0 0"/>
+</joint>
+
+<!-- rear camera negativ -->
+<link name="camera_rear_negativ">
+  <visual>
+    <origin xyz="${-length_wagon_rear/2-0.036} +0.006 ${height_wagon*2/3+0.0345}" rpy="${-camera_angle-1.57} 0 1.57"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <mesh filename="package://floribot_simulation/meshes/Anschluss_Item_negativ.stl" scale="0.001 0.001 0.001" />
+    </geometry>
+    <material name="c">
+      <color rgba="0 0.9 0.9 1.0"/>
+    </material>
+  </visual>
+
+  <inertial>
+    <mass value="0.1"/>
+    <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+  </inertial>
+</link>
+
+<!-- gazebo color -->
+<xacro:darkGreyColor linkName = "camera_rear_negativ" />
+
+<!-- joint between rear camera positiv and negativ -->
+<joint name="j_camera_rear_negativ" type="fixed">
+      <parent link="camera_rear_positiv"/>
+      <child link="camera_rear_negativ"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+</joint>
+
+
+<!-- joint rear laserscanner -->
+<joint name="j_rear_laser" type="fixed">
+  <parent link="rear_wagon"/>
+  <child link="rear_laser_mount_link"/>
+  <origin xyz="${x_laser_back} 0 ${laser_height}" rpy="3.14 0 3.14"/>
+</joint>
+
+<!-- rear laserscanner -->
+<xacro:sick_tim_5xx name="rear_laser" ros_topic="laser_scanner_rear"/>
+
+<!-- joint front wagon and wheel fl -->
+<joint name="joint_frontLeft" type="continuous">
+  <parent link="base_link"/>
+  <child link="frontLeft"/>
+  <axis xyz="0 1 0"/>
+  <origin xyz="${x_joint_wheel_front} ${y_joint_wheel_front} 0"/>
+  <limit effort="100.0" velocity="14.2857" />
+</joint>
+
+<!-- transmission fl -->
+<xacro:wheel_transmission position="frontLeft" />
+
+<!-- wheel fl -->
+<link name="frontLeft">
+  <visual>
+    <origin xyz="0 -${wheel_thickness/2-0.0095} 0" rpy="1.57 0 0"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <mesh filename="package://floribot_simulation/meshes/Reifen.stl" scale="0.001 0.001 0.001" />
+    </geometry>
+    <material name="r">
+      <color rgba="0.9 0 0 1.0"/>
+    </material>
+  </visual>
+
+  <collision>
+    <origin xyz="0 0 0" rpy="1.57 0 0"/>
+    <geometry>
+      <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
+    </geometry>
+  </collision>
+
+  <inertial>
+    <mass value="2.4"/>
+    <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
+  </inertial>
+</link>
+
+<!-- joint front wagon and fr -->
+<joint name="joint_frontRight" type="continuous">
+  <parent link="base_link"/>
+  <child link="frontRight"/>
+  <axis xyz="0 1 0"/>
+  <origin xyz="${x_joint_wheel_front} -${y_joint_wheel_front} 0"/>
+  <limit effort="100.0" velocity="14.2857" />
+</joint>
+
+<!-- transmission fr -->
+<xacro:wheel_transmission position="frontRight" />
+
+<!-- wheel fr -->
+<link name="frontRight">
+  <visual>
+    <origin xyz="0 -${wheel_thickness/2 - 0.0105} 0" rpy="1.57 0 0"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <mesh filename="package://floribot_simulation/meshes/Reifen.stl" scale="0.001 0.001 0.001" />
+    </geometry>
+    <material name="r">
+      <color rgba="0.9 0 0 1.0"/>
+    </material>
+  </visual>
+
+  <collision>
+    <origin xyz="0 0 0" rpy="1.57 0 0"/>
+    <geometry>
+      <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
+    </geometry>
+  </collision>
+
+  <inertial>
+    <mass value="2.4"/>
+    <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
+    </inertial>
+</link>
+
+<!-- joint rear wagon and wheel rr -->
+<joint name="joint_rearRight" type="continuous">
+  <parent link="rear_wagon_ghost"/>
+  <child link="rearRight"/>
+  <axis xyz="0 1 0"/>
+  <origin xyz="${x_joint_wheel_back} -${y_joint_wheel_back} 0"/>
+  <limit effort="100.0" velocity="14.2857" />
+</joint>
+
+<!-- transmission rr -->
+<xacro:wheel_transmission position="rearRight" />
+
+<!-- wheel rr -->
+<link name="rearRight">
+  <visual>
+    <origin xyz="0 -${wheel_thickness/2 - 0.0105} 0" rpy="1.57 0 0"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <mesh filename="package://floribot_simulation/meshes/Reifen.stl" scale="0.001 0.001 0.001" />
+    </geometry>
+    <material name="r">
+      <color rgba="0.9 0 0 1.0"/>
+    </material>
+  </visual>
+
+  <collision>
+    <origin xyz="0 0 0" rpy="1.57 0 0"/>
+    <geometry>
+      <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
+    </geometry>
+  </collision>
+
+  <inertial>
+    <mass value="2.4"/>
+    <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
+  </inertial>
+</link>
+
+<!-- joint rear wagon and wheel rl -->
+<joint name="joint_rearLeft" type="continuous">
+  <parent link="rear_wagon_ghost"/>
+  <child link="rearLeft"/>
+  <axis xyz="0 1 0"/>
+  <origin xyz="${x_joint_wheel_back} ${y_joint_wheel_back} 0"/>
+  <limit effort="100.0" velocity="14.2857" />
+</joint>
+
+<!-- transmission rl -->
+<xacro:wheel_transmission position="rearLeft" />
+
+<!-- wheel rl -->
+<link name="rearLeft">
+  <visual>
+    <origin xyz="0 -${wheel_thickness/2-0.0095}  0" rpy="1.57 0 0"/>
+    <axis xyz="0 0 0"/>
+    <geometry>
+      <mesh filename="package://floribot_simulation/meshes/Reifen.stl" scale="0.001 0.001 0.001" />
+    </geometry>
+    <material name="r">
+      <color rgba="0.9 0 0 1.0"/>
+    </material>
+  </visual>
+
+  <collision>
+    <origin xyz="0 0 0" rpy="1.57 0 0"/>
+    <geometry>
+      <cylinder length="${wheel_thickness}" radius="${wheel_radius}"/>
+    </geometry>
+  </collision>
+
+  <inertial>
+    <mass value="2.4"/>
+    <inertia ixx="0.014" ixy="0.0" ixz="0.0" iyy="0.026" iyz="0.0" izz="0.014"/>
+  </inertial>
+</link>
+
+<!-- Wheel Colors-->
+<xacro:wheel_color linkName="frontLeft" />
+<xacro:wheel_color linkName="frontRight" />
+<xacro:wheel_color linkName="rearLeft" />
+<xacro:wheel_color linkName="rearRight" />
 
 <!-- Gazebo plugin for ROS Control -->
-  <gazebo>
-    <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
-      <robotNamespace>floribot</robotNamespace>
-    </plugin>
-  </gazebo>
+<gazebo>
+  <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
+    <robotNamespace>floribot</robotNamespace>
+  </plugin>
+</gazebo>
 
 </robot>
