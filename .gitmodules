@@ -4,3 +4,9 @@
 [submodule "src/virtual_maize_field"]
 	path = src/virtual_maize_field
 	url = https://github.com/FieldRobotEvent/virtual_maize_field.git
+[submodule "src/object_detecion"]
+	path = src/object_detecion
+	url = https://github.com/hupf80/object_detecion.git
+[submodule "src/boundingbox_msgs"]
+	path = src/boundingbox_msgs
+	url = https://github.com/hupf80/boundingbox_msgs.git
