@@ -7,7 +7,7 @@ Um das Repository zu klonen folgenden Befehl benutzen:
 
 Existiert der Ordner bereits, muss er zuerst gelöscht werden. Optional könnte man auch das <catkin_ws> durch einen anderen Zielordnernamen ersetzen.<br>
 <br>
-Um die Daten im Submodul virtual_maize_field herunterzuladen muss zuerst
+Um die Daten im Submodul virtual_maize_field herunterzuladen muss man sich im catkin_ws Ordner befinden und der Befehl
 
     git submodule init
     
@@ -33,7 +33,7 @@ Python:
     
 XACRO:
 
-    sudo apt install ros-neotic-xacro
+    sudo apt install ros-noetic-xacro
     
 Anmerkung XACRO: Nach dem sudo apt install Befehl die xacro.py aus dem Git herunterladen und überpüfen, ob das Skript als Programm ausgeführt werden kann. Dazu Rechtsklick auf das xacro.py -> Dann auf Eigenschaften -> Dann im Reiter auf Zugriffsrechte ->  Überprüfen, ob im Punkt "Ausführen:" die Checkbox ein Häkchen hat. Ist das der Fall, dann per folgenden Befehl die Datei in den Zielordner kopieren.
 
