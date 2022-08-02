@@ -17,6 +17,9 @@ ausgeführt werden und anschließend
     
 Es werden dann alle Daten des Submoduls heruntergeladen. 
 
+# Was liegt hier ab?
+In diesem Branch liegt der Code und die Dateien für die grundlegende Floribot Simulation. Zusätzlich liegen die Dateien für den Simulation Task 1 (Navigation, Basic & Advanced) hier ab. Diese können über das Launch-File Floribot_Task1.launch gestartet werden. 
+
 # Benötigte Software
 ROS Noetic: http://wiki.ros.org/noetic/Installation/Ubuntu <br>
 ROS Velocity Controllers: 
