@@ -16,13 +16,13 @@ import rospkg
 
 class MoveRobotPathPattern:
     def __init__(self):
-        self.real_sim_parameter = rospy.get_param('~real_sim_parameter')         
+        self.real_sim_parameter = rospy.get_param('~real_sim_parameter')                                                 # Get real_sim_parameter to determine if the script is running on a real robot or in a simulation         
         if self.real_sim_parameter == 0:  # Real Robot
-            self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
-            self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)
-            self.path_pattern = rospy.get_param('~path_pattern')                                         # [str] path pattern describing the robots trajectory through the field e.g. S-1L-2L-1L-0R-F
-            self.path_pattern = self.path_pattern.replace(" ", "")                                          # remove spaces: S 1L 2L 1L 0R F --> S1L2L1L0RF
-            self.path_pattern = self.path_pattern[1:-1]                                                     # remove S (Start) and F (Finish): S1L2L1L1RF --> 1L2L1L1R
+            self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /sensors/scanFront
+            self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)     # [Laserscan] subscriber on /sensors/scanRear
+            self.path_pattern = rospy.get_param('~path_pattern')                                                         # [str] path pattern describing the robots trajectory through the field e.g. S-1L-2L-1L-0R-F
+            self.path_pattern = self.path_pattern.replace(" ", "")                                                       # remove spaces: S 1L 2L 1L 0R F --> S1L2L1L0RF
+            self.path_pattern = self.path_pattern[1:-1]                                                                  # remove S (Start) and F (Finish): S1L2L1L1RF --> 1L2L1L1R
 
         
         elif self.real_sim_parameter == 1:  # Simulation
@@ -32,9 +32,6 @@ class MoveRobotPathPattern:
             print('Robot/Simulation Parameter doesnt set')
             return
 
-        self.sub_laser = rospy.Subscriber("sensors/scanFront", LaserScan, self.laser_callback_front, queue_size=3)   # [Laserscan] subscriber on /laser_scanner_front
-        self.sub_laser = rospy.Subscriber("sensors/scanRear", LaserScan, self.laser_callback_rear, queue_size=3)
-        
         self.pub_vel = rospy.Publisher("cmd_vel", Twist, queue_size=1)                                  # [Twist] publisher on /cmd_vel
         self.p_gain_offset_headland = rospy.get_param('~p_gain_offset_headland')                        # [1.0] gain of the p-controller applied to offset from an imaginary line for driving within the headland
         self.p_gain_orient_headland = rospy.get_param('~p_gain_orient_headland')                        # [1.0] gain of the p-controller applied to orientation from an imaginary line for driving within the headland
@@ -63,29 +60,29 @@ class MoveRobotPathPattern:
         self.angle_valid = 0.0                                                                          # [rad] valid mid-row angle applicable for robot control
         self.offset_valid = 0.0                                                                         # [m] valid mid-row offset applicable for robot control
         self.time_start = rospy.Time.now()                                                              # [rospy.Time] timestamp used in state_headlands
-        self.time_exit_row = rospy.Time.now()
-        self.laser_box_drive_headland = np.zeros((10,2))
+        self.time_exit_row = rospy.Time.now()                                                           # [rospy.Time] timestamp used in state_turn_exit_row
+        self.laser_box_drive_headland = np.zeros((10,2))                                                # [x, y] Initialising the laserbox
         self.laser_box_detect_row = np.zeros((10,2))
         self.laser_box_drive_row = np.zeros((10,2)) 
         self.xy_scan_raw = np.zeros((10,2))
-        self.there_was_row = False
+        self.there_was_row = False                                                                      # [Bool] Variables for determing the transitions between rows
         self.there_was_no_row = False
         self.trans_norow2row = False
         self.trans_row2norow = True
-        self.ctr_trans_row2norow = 0
+        self.ctr_trans_row2norow = 0                                                                    # [1] counter for the transitions between rows
         self.ctr_trans_norow2row = 0
         self.collision_ctr = 0                                                                          # [1] stores the scan dots seen in a small laser box right in front of the robot
         self.collision_ctr_previous = 0
-        # self.robot_running_crazy = False                                                                # [True, False] True if robot is driving through the field like a headless chicken
-        # self.end_of_row_reached = False                                                                 # [True, False] True if robot has reached the end of the row
+        # self.robot_running_crazy = False                                                              # [True, False] True if robot is driving through the field like a headless chicken
+        # self.end_of_row_reached = False                                                               # [True, False] True if robot has reached the end of the row
         self.time_start_reset_scan_dots = rospy.Time.now()
         self.time_collision_detection = rospy.Time.now()
-        self.scan_left_front = np.zeros((10,2))
+        self.scan_left_front = np.zeros((10,2))                                                         # Initialising Arrays for laserdata
         self.scan_right_front = np.zeros((10,2))
         self.scan_left_rear = np.zeros((10,2))
         self.scan_right_rear = np.zeros((10,2))
-        self.robot_width = 0.41
-        self.robot_length = 1.30
+        self.robot_width = 0.41                                                                         # [m] Width of the robot
+        self.robot_length = 1.30                                                                        # [m] Length of the robot
 
     #########################################
     ######### Miscellaneous Methods #########
@@ -308,7 +305,8 @@ class MoveRobotPathPattern:
 
         self.scan_left_front = self.laser_box(self.scan_front, 0.0, 1.0, self.robot_width/2, self.row_width)
         self.scan_right_front = self.laser_box(self.scan_front, 0.0, 1.0, -self.row_width, -self.robot_width/2)
-
+        
+        # Rear laserscans are currently not used 
         #self.scan_left_rear = self.laser_box(self.scan_rear, -0.2, 1.0, self.robot_width/2, self.row_width)
         #self.scan_right_rear = self.laser_box(self.scan_rear, -0.2, 1.0, -self.row_width, -self.robot_width/2)
 
@@ -320,14 +318,15 @@ class MoveRobotPathPattern:
 
         #print ("scan_right", self.scan_right[1, :])
         #print ("scan_left", self.scan_left[1, :])
-
+        
+        # Printing debug messages
         print ("mean_left_front: ", mean_left_front)
         print ("mean_right_front: ", mean_right_front)
 
         #print ("mean_left_rear: ", mean_left_rear)
         #print ("mean_right_rear: ", mean_right_rear)
-
-
+        
+        # Calculating Offset
         if np.isnan(mean_left_front) and not np.isnan(mean_right_front):
             offset = mean_right_front + self.row_width/2
         elif np.isnan(mean_right_front) and not np.isnan(mean_left_front):
@@ -346,18 +345,15 @@ class MoveRobotPathPattern:
         max_offset = self.row_width/2 # [m] maximum mid-row-offset possible
         normed_offset = self.offset_valid / max_offset
         normed_offset = self.clip(normed_offset, 1.0, -1.0)
-
+        
+        # Printing debug messages
         print("Offset:", offset)
         print("Offset_valid:", self.offset_valid)
         print("Normed Offset:", normed_offset)
 
         cmd_vel = Twist()
-        #cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - normed_offset**2)
-        #cmd_vel.angular.z = self.max_ang_vel_robot * np.sign(normed_offset) * normed_offset**2
         cmd_vel.linear.x = self.max_lin_vel_in_row * (1 - np.abs(normed_offset))
         cmd_vel.angular.z = self.max_ang_vel_robot * normed_offset
-        #print("Vel_lin", cmd_vel.linear.x)
-        #print("Vel_angle", cmd_vel.angular.z)
         pub_vel.publish(cmd_vel)
 
         end_of_row = self.detect_row_end()
@@ -446,11 +442,7 @@ class MoveRobotPathPattern:
             # reset variable
             self.x_mean_old = 0.0
             
-            #self.move_robot(pub_vel, self.lin_vel_turn, ang_vel)
-            #self.x_mean_old = self.x_mean
             return "state_headlands"
-            #return "state_turn_exit_row"
-            #return "state_finished"
         else:
             self.move_robot(pub_vel, self.lin_vel_turn, ang_vel)
             self.x_mean_old = self.x_mean
@@ -517,6 +509,8 @@ class MoveRobotPathPattern:
         num_scan_dots = self.laser_box_detect_row.shape[1]
         there_is_row = num_scan_dots > upper_thresh_scan_points
         there_is_no_row = num_scan_dots < lower_thresh_scan_points
+        
+        # Printing debug messages
         print("row detection dots", num_scan_dots)
         print("there_is_row", there_is_row)
         print("there_is_no_row", there_is_no_row)
